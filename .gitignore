@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# Node
+node_modules/
+.next/
+out/
+dist/
+
+# App data
+uploads/
+chroma_db/
+
+# OS / editor
+.DS_Store
+.vscode/
