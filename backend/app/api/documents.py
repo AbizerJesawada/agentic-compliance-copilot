@@ -1,6 +1,6 @@
 from pathlib import Path
 from uuid import uuid4
-
+from app.services.document_parser import extract_text_from_file
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
 router= APIRouter(prefix="/documents",tags=["Documents"])
@@ -25,6 +25,7 @@ async def upload_document(file:UploadFile=File(...)):
 
     file_content= await file.read()
     file_path.write_bytes(file_content)
+    extracted_text=extract_text_from_file(file_path)
 
 
     return{
@@ -34,4 +35,6 @@ async def upload_document(file:UploadFile=File(...)):
         "content_type":file.content_type,
         "size_bytes":len(file_content),
         "path":str(file_path),
+        "character_count":len(extracted_text),
+        "text_preview":extracted_text[:500],
     }
