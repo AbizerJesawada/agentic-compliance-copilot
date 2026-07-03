@@ -13,6 +13,8 @@ dist/
 # App data
 uploads/
 chroma_db/
+backend/uploads/
+backend/extracted_text/
 
 # OS / editor
 .DS_Store

@@ -27,7 +27,13 @@ async def upload_document(file:UploadFile=File(...)):
 
     file_content= await file.read()
     file_path.write_bytes(file_content)
-    extracted_text=extract_text_from_file(file_path)
+    try:
+        extracted_text= extract_text_from_file(file_path)
+    except Exception as error:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Document uploaded, but text extraction failed: {str(error)}",
+        )
     extracted_text_filename=f"{file_path.stem}.txt"
     extracted_text_path=EXTRACTED_TEXT_DIR/extracted_text_filename
     extracted_text_path.write_text(extracted_text,encoding="utf-8")
