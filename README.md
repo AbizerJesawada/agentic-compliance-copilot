@@ -24,3 +24,17 @@ This project helps companies analyze internal policies, contracts, SOPs, vendor 
 - Backend `/health` endpoint working
 - Next.js frontend initialized
 - Basic homepage created
+
+## Day 2 Status
+
+- Added document upload API: `POST /documents/upload`
+- Added file validation for PDF, DOCX, TXT, and CSV files
+- Added document text extraction for TXT, CSV, PDF, and DOCX
+- Added extracted text saving in `backend/extracted_text/`
+- Added original file saving in `backend/uploads/`
+- Added clean error handling for failed text extraction
+
+## Current Backend APIs
+
+- `GET /health` - checks if the backend is running
+- `POST /documents/upload` - uploads a document, validates file type, saves the original file, extracts text, and saves extracted text
