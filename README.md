@@ -38,3 +38,17 @@ This project helps companies analyze internal policies, contracts, SOPs, vendor 
 
 - `GET /health` - checks if the backend is running
 - `POST /documents/upload` - uploads a document, validates file type, saves the original file, extracts text, and saves extracted text
+
+## Day 3 Status
+
+- Improved PDF extraction using PyMuPDF
+- Added extraction quality warning for low-quality/scanned PDFs
+- Added text chunking service with chunk size and overlap
+- Added chunking API: `POST /documents/chunk`
+- Added chunk JSON saving in `backend/chunks/`
+
+## Current Backend APIs
+
+- `GET /health` - checks if the backend is running
+- `POST /documents/upload` - uploads a document, validates file type, saves the original file, extracts text, and saves extracted text
+- `POST /documents/chunk` - chunks extracted text and saves chunk data as JSON

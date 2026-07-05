@@ -2,7 +2,8 @@ from pathlib import Path
 import csv
 
 from docx import Document
-from pypdf import PdfReader
+import fitz
+
 
 
 def extract_text_from_file(file_path: Path) -> str:
@@ -40,12 +41,13 @@ def extract_text_from_csv(file_path: Path) -> str:
 
 
 def extract_text_from_pdf(file_path: Path) -> str:
-    reader = PdfReader(str(file_path))
+    document=fitz.open(file_path)
     pages_text = []
 
-    for page in reader.pages:
-        text = page.extract_text() or ""
+    for page in document:
+        text = page.get_text("text")
         pages_text.append(text)
+    document.close()
 
     return "\n\n".join(pages_text)
 

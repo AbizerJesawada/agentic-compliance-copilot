@@ -15,6 +15,7 @@ uploads/
 chroma_db/
 backend/uploads/
 backend/extracted_text/
+backend/chunks/
 
 # OS / editor
 .DS_Store

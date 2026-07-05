@@ -1,53 +1,151 @@
+import json
 from pathlib import Path
 from uuid import uuid4
-from app.services.document_parser import extract_text_from_file
+
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from pydantic import BaseModel
 
-router= APIRouter(prefix="/documents",tags=["Documents"])
+from app.services.document_parser import extract_text_from_file
+from app.services.text_chunker import chunk_text
 
-UPLOAD_DIR=Path("uploads")
-EXTRACTED_TEXT_DIR=Path("extracted_text")
+router = APIRouter(prefix="/documents", tags=["Documents"])
 
-ALLOWED_EXTENSIONS={".pdf",".docx",".txt",".csv"}
+UPLOAD_DIR = Path("uploads")
+EXTRACTED_TEXT_DIR = Path("extracted_text")
+CHUNKS_DIR = Path("chunks")
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt", ".csv"}
 
-@router.post("/uploads")
-async def upload_document(file:UploadFile=File(...)):
-    file_extension=Path(file.filename).suffix.lower()
+
+class ChunkRequest(BaseModel):
+    extracted_text_path: str
+    chunk_size: int = 1000
+    chunk_overlap: int = 200
+
+
+def get_extraction_warning(extracted_text: str) -> str | None:
+    if len(extracted_text.strip()) < 100:
+        return (
+            "Extracted text is very short. The document may be scanned or "
+            "image-based. OCR may be required."
+        )
+
+    suspicious_characters = ["�", "ł", "qSt", "Ma0", "Jesauonda"]
+
+    for character in suspicious_characters:
+        if character in extracted_text:
+            return (
+                "Extracted text may contain recognition errors. OCR may be "
+                "required for better accuracy."
+            )
+
+    return None
+
+
+@router.post("/upload")
+async def upload_document(file: UploadFile = File(...)):
+    file_extension = Path(file.filename).suffix.lower()
 
     if file_extension not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail="Unsupported File type. Allowed types: PDF, DOCX, TXT, CSV"
+            detail="Unsupported file type. Allowed types: PDF, DOCX, TXT, CSV.",
         )
+
     UPLOAD_DIR.mkdir(exist_ok=True)
     EXTRACTED_TEXT_DIR.mkdir(exist_ok=True)
 
-    safe_filename=f"{uuid4()}{file_extension}"
-    file_path=UPLOAD_DIR/safe_filename
+    safe_filename = f"{uuid4()}{file_extension}"
+    file_path = UPLOAD_DIR / safe_filename
 
-    file_content= await file.read()
+    file_content = await file.read()
     file_path.write_bytes(file_content)
+
     try:
-        extracted_text= extract_text_from_file(file_path)
+        extracted_text = extract_text_from_file(file_path)
     except Exception as error:
         raise HTTPException(
             status_code=422,
             detail=f"Document uploaded, but text extraction failed: {str(error)}",
         )
-    extracted_text_filename=f"{file_path.stem}.txt"
-    extracted_text_path=EXTRACTED_TEXT_DIR/extracted_text_filename
-    extracted_text_path.write_text(extracted_text,encoding="utf-8")
 
+    extracted_text_filename = f"{file_path.stem}.txt"
+    extracted_text_path = EXTRACTED_TEXT_DIR / extracted_text_filename
+    extracted_text_path.write_text(extracted_text, encoding="utf-8")
 
+    extraction_warning = get_extraction_warning(extracted_text)
 
     return {
-    "message": "Document uploaded and parsed successfully",
-    "original_filename": file.filename,
-    "saved_filename": safe_filename,
-    "content_type": file.content_type,
-    "size_bytes": len(file_content),
-    "path": str(file_path),
-    "extracted_text_path": str(extracted_text_path),
-    "character_count": len(extracted_text),
-    "text_preview": extracted_text[:500],
-}
+        "message": "Document uploaded and parsed successfully",
+        "original_filename": file.filename,
+        "saved_filename": safe_filename,
+        "content_type": file.content_type,
+        "size_bytes": len(file_content),
+        "path": str(file_path),
+        "extracted_text_path": str(extracted_text_path),
+        "character_count": len(extracted_text),
+        "text_preview": extracted_text[:500],
+        "extraction_warning": extraction_warning,
+    }
+
+
+@router.post("/chunk")
+def chunk_document(request: ChunkRequest):
+    extracted_text_path = Path(request.extracted_text_path)
+
+    if not extracted_text_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Extracted text file not found.",
+        )
+
+    CHUNKS_DIR.mkdir(exist_ok=True)
+
+    text = extracted_text_path.read_text(encoding="utf-8", errors="ignore")
+
+    try:
+        chunks = chunk_text(
+            text=text,
+            chunk_size=request.chunk_size,
+            chunk_overlap=request.chunk_overlap,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+    chunk_records = []
+    chunk_previews = []
+
+    for index, chunk in enumerate(chunks):
+        chunk_record = {
+            "chunk_index": index,
+            "character_count": len(chunk),
+            "text": chunk,
+            "source_path": str(extracted_text_path),
+        }
+
+        chunk_records.append(chunk_record)
+
+        chunk_previews.append(
+            {
+                "chunk_index": index,
+                "character_count": len(chunk),
+                "preview": chunk[:300],
+            }
+        )
+
+    chunks_filename = f"{extracted_text_path.stem}.json"
+    chunks_path = CHUNKS_DIR / chunks_filename
+
+    chunks_path.write_text(
+        json.dumps(chunk_records, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    return {
+        "message": "Text chunked successfully",
+        "source_path": str(extracted_text_path),
+        "chunks_path": str(chunks_path),
+        "chunk_size": request.chunk_size,
+        "chunk_overlap": request.chunk_overlap,
+        "chunk_count": len(chunks),
+        "chunks": chunk_previews,
+    }
