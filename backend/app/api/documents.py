@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from app.services.document_parser import extract_text_from_file
 from app.services.text_chunker import chunk_text
+from app.services.vector_store import index_chunks_file, search_similar_chunks
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -20,6 +21,15 @@ class ChunkRequest(BaseModel):
     extracted_text_path: str
     chunk_size: int = 1000
     chunk_overlap: int = 200
+
+
+class IndexRequest(BaseModel):
+    chunks_path: str
+
+
+class SearchRequest(BaseModel):
+    query: str
+    top_k: int = 5
 
 
 def get_extraction_warning(extracted_text: str) -> str | None:
@@ -149,3 +159,28 @@ def chunk_document(request: ChunkRequest):
         "chunk_count": len(chunks),
         "chunks": chunk_previews,
     }
+
+
+@router.post("/index")
+def index_document_chunks(request: IndexRequest):
+    chunks_path = Path(request.chunks_path)
+
+    try:
+        result = index_chunks_file(chunks_path)
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error))
+
+    return result
+
+
+@router.post("/search")
+def search_documents(request: SearchRequest):
+    if not request.query.strip():
+        raise HTTPException(status_code=400, detail="Search query cannot be empty.")
+
+    result = search_similar_chunks(
+        query=request.query,
+        top_k=request.top_k,
+    )
+
+    return result
