@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from app.services.document_parser import extract_text_from_file
 from app.services.text_chunker import chunk_text
 from app.services.vector_store import index_chunks_file, search_similar_chunks
+from app.services.rag_answer import generate_grounded_answer
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -30,6 +31,11 @@ class IndexRequest(BaseModel):
 class SearchRequest(BaseModel):
     query: str
     top_k: int = 5
+
+class AskRequest(BaseModel):
+    question: str
+    top_k: int = 5
+
 
 
 def get_extraction_warning(extracted_text: str) -> str | None:
@@ -184,3 +190,31 @@ def search_documents(request: SearchRequest):
     )
 
     return result
+
+@router.post("/ask")
+def ask_document_question(request: AskRequest):
+    if not request.question.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Question cannot be empty.",
+        )
+
+    search_result = search_similar_chunks(
+        query=request.question,
+        top_k=request.top_k,
+    )
+
+    answer_result = generate_grounded_answer(
+        question=request.question,
+        matches=search_result["matches"],
+    )
+
+    return {
+    "question": request.question,
+    "answer": answer_result["answer"],
+    "answer_type": "extractive",
+    "confidence": "high" if answer_result["sources"] else "low",
+    "retrieved_chunk_count": len(answer_result["sources"]),
+    "sources": answer_result["sources"],
+    "context_used": answer_result["context_used"],
+}

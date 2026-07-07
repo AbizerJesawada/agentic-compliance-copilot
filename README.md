@@ -52,3 +52,40 @@ This project helps companies analyze internal policies, contracts, SOPs, vendor 
 - `GET /health` - checks if the backend is running
 - `POST /documents/upload` - uploads a document, validates file type, saves the original file, extracts text, and saves extracted text
 - `POST /documents/chunk` - chunks extracted text and saves chunk data as JSON
+
+## Day 4 Status
+
+- Added Chroma vector database integration
+- Added local SentenceTransformer embeddings using `all-MiniLM-L6-v2`
+- Added chunk indexing API: `POST /documents/index`
+- Added semantic search API: `POST /documents/search`
+- Verified retrieval for compliance question over indexed chunks
+
+- `POST /documents/index` - indexes saved chunk JSON files into Chroma vector database
+- `POST /documents/search` - searches indexed chunks using semantic similarity
+
+## Day 5: Basic RAG Answer API
+
+Today we added the first version of the RAG answer system.
+
+Completed:
+- Added `backend/app/services/rag_answer.py`
+- Added `/documents/ask` endpoint
+- Added extractive answer generation from retrieved chunks
+- Added best sentence selection to avoid returning full chunks
+- Added source citations
+- Added `answer_type`, `confidence`, and `retrieved_chunk_count`
+- Added duplicate retrieved chunk removal
+
+Current `/documents/ask` flow:
+
+```text
+User question
+    ↓
+Semantic search in ChromaDB
+    ↓
+Remove duplicate chunks
+    ↓
+Select best sentence from top chunk
+    ↓
+Return answer with sources

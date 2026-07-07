@@ -16,7 +16,7 @@ chroma_db/
 backend/uploads/
 backend/extracted_text/
 backend/chunks/
-
+backend/chroma_db/
 # OS / editor
 .DS_Store
 .vscode/
