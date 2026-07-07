@@ -70,15 +70,42 @@ def remove_duplicate_matches(matches: list[dict]) -> list[dict]:
 
     return unique_matches
 
+def calculate_confidence(matches: list[dict]) -> str:
+    if not matches:
+        return "low"
+
+    best_distance = matches[0].get("distance")
+
+    if best_distance is None:
+        return "unknown"
+
+    if best_distance <= 0.30:
+        return "high"
+
+    if best_distance <= 0.70:
+        return "medium"
+
+    return "low"
 
 def generate_grounded_answer(question: str, matches: list[dict]) -> dict:
     matches = remove_duplicate_matches(matches)
+
     if not matches:
         return {
             "answer": "I could not find relevant information in the indexed documents.",
             "sources": [],
             "context_used": "",
+            "confidence": "low",
         }
+
+    confidence = calculate_confidence(matches)
+    if confidence == "low":
+        return {
+        "answer": "I could not find relevant information in the indexed documents.",
+        "sources": [],
+        "context_used": build_context_from_matches(matches),
+        "confidence": confidence,
+    }
 
     best_match = matches[0]
     best_text = best_match.get("text", "")
@@ -107,4 +134,5 @@ def generate_grounded_answer(question: str, matches: list[dict]) -> dict:
         ),
         "sources": sources,
         "context_used": context,
+        "confidence": confidence,
     }

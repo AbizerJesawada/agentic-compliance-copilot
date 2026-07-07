@@ -213,7 +213,7 @@ def ask_document_question(request: AskRequest):
     "question": request.question,
     "answer": answer_result["answer"],
     "answer_type": "extractive",
-    "confidence": "high" if answer_result["sources"] else "low",
+    "confidence": answer_result["confidence"],
     "retrieved_chunk_count": len(answer_result["sources"]),
     "sources": answer_result["sources"],
     "context_used": answer_result["context_used"],

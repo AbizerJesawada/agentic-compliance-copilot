@@ -89,3 +89,8 @@ Remove duplicate chunks
 Select best sentence from top chunk
     ↓
 Return answer with sources
+
+Additional improvements:
+- Added confidence scoring based on vector distance.
+- Added low-confidence guardrail to avoid answering unrelated questions.
+- If retrieval confidence is low, the system returns: "I could not find relevant information in the indexed documents."
