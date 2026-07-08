@@ -9,6 +9,7 @@ from app.services.document_parser import extract_text_from_file
 from app.services.text_chunker import chunk_text
 from app.services.vector_store import index_chunks_file, search_similar_chunks
 from app.services.rag_answer import generate_grounded_answer
+from app.services.langchain_rag import generate_langchain_answer
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -209,12 +210,27 @@ def ask_document_question(request: AskRequest):
         matches=search_result["matches"],
     )
 
+    llm_answer = None
+
+    llm_error = None
+
+    if answer_result["confidence"] != "low":
+        try:
+            llm_answer = generate_langchain_answer(
+                question=request.question,
+                context=answer_result["context_used"],
+        )
+        except Exception as error:
+            llm_error = str(error)
+            llm_answer = None
+
     return {
-    "question": request.question,
-    "answer": answer_result["answer"],
-    "answer_type": "extractive",
-    "confidence": answer_result["confidence"],
-    "retrieved_chunk_count": len(answer_result["sources"]),
-    "sources": answer_result["sources"],
-    "context_used": answer_result["context_used"],
-}
+        "question": request.question,
+        "answer": llm_answer if llm_answer else answer_result["answer"],
+        "answer_type": "generative" if llm_answer else "extractive",
+        "confidence": answer_result["confidence"],
+        "retrieved_chunk_count": len(answer_result["sources"]),
+        "sources": answer_result["sources"],
+        "context_used": answer_result["context_used"],
+        "llm_error": llm_error,
+    }

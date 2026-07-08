@@ -94,3 +94,40 @@ Additional improvements:
 - Added confidence scoring based on vector distance.
 - Added low-confidence guardrail to avoid answering unrelated questions.
 - If retrieval confidence is low, the system returns: "I could not find relevant information in the indexed documents."
+
+
+## Day 6: LangChain + Gemini RAG
+
+Today we upgraded `/documents/ask` from extractive RAG to LLM-based generative RAG using LangChain and Gemini.
+
+Completed:
+- Installed LangChain packages.
+- Added Gemini API integration using `langchain-google-genai`.
+- Created `backend/app/services/langchain_rag.py`.
+- Added a strict compliance RAG prompt.
+- Sent retrieved document context and user question to Gemini through LangChain.
+- Returned generative answers when retrieval confidence is high or medium.
+- Kept extractive fallback when Gemini fails or retrieval confidence is low.
+- Added `llm_error` field for debugging LLM failures.
+- Verified low-confidence questions skip the LLM and return a safe refusal.
+
+Current `/documents/ask` flow:
+
+```text
+User question
+    ↓
+Semantic search in ChromaDB
+    ↓
+Remove duplicate chunks
+    ↓
+Calculate confidence from vector distance
+    ↓
+If confidence is low:
+        return safe refusal
+    ↓
+If confidence is medium/high:
+        send context + question to LangChain
+    ↓
+Gemini generates grounded answer
+    ↓
+Return answer with citations

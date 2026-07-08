@@ -103,10 +103,9 @@ def generate_grounded_answer(question: str, matches: list[dict]) -> dict:
         return {
         "answer": "I could not find relevant information in the indexed documents.",
         "sources": [],
-        "context_used": build_context_from_matches(matches),
+        "context_used": "",
         "confidence": confidence,
     }
-
     best_match = matches[0]
     best_text = best_match.get("text", "")
     best_sentence = choose_best_sentence(question, best_text)
