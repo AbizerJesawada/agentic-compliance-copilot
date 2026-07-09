@@ -131,3 +131,36 @@ If confidence is medium/high:
 Gemini generates grounded answer
     ↓
 Return answer with citations
+
+
+## Day 7: LangGraph Agent Workflow
+
+Today we converted the RAG answer flow into a LangGraph workflow.
+
+Completed:
+- Installed LangGraph.
+- Created `backend/app/services/rag_graph.py`.
+- Added graph state using `TypedDict`.
+- Added separate workflow nodes:
+  - `retrieve_context`
+  - `prepare_answer`
+  - `safe_refusal`
+  - `generate_answer`
+- Added conditional routing with `route_by_confidence`.
+- Updated `/documents/ask` to call `run_rag_graph()`.
+- Tested both graph paths:
+  - medium/high confidence → LangChain + Gemini answer
+  - low confidence → safe refusal
+
+Current graph:
+
+```text
+START
+    ↓
+retrieve_context
+    ↓
+prepare_answer
+    ↓
+route_by_confidence
+    ├── low confidence → safe_refusal → END
+    └── medium/high confidence → generate_answer → END
