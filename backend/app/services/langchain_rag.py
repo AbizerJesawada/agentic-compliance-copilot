@@ -53,3 +53,44 @@ def generate_langchain_answer(question: str, context: str) -> str:
     )
 
     return answer
+
+RISK_REPORT_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            """
+You are an enterprise compliance analyst.
+
+Write a short, clear compliance risk summary using only the provided analysis.
+
+Rules:
+- Do not invent risks or evidence.
+- Do not say that a vendor is non-compliant unless the analysis explicitly says so.
+- Explain the risk level, important findings, and recommended actions.
+- Keep the response concise and professional.
+- Do not convert the risk score into a score out of 10 or any other maximum.
+- The risk score represents the importance of detected compliance requirements, not proof of vendor non-compliance.
+- Do not describe the vendor or compliance framework as high-risk, non-compliant, failing, or deficient unless that is explicitly present in the analysis.
+- Describe findings as requirements or controls that should be verified.
+""",
+        ),
+        (
+            "human",
+            """
+Compliance risk analysis:
+{analysis}
+""",
+        ),
+    ]
+)
+
+
+def generate_risk_summary(analysis: str) -> str:
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-3.1-flash-lite",
+        temperature=0,
+    )
+
+    chain = RISK_REPORT_PROMPT | llm | StrOutputParser()
+
+    return chain.invoke({"analysis": analysis})

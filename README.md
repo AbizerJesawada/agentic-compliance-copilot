@@ -164,3 +164,43 @@ prepare_answer
 route_by_confidence
     ├── low confidence → safe_refusal → END
     └── medium/high confidence → generate_answer → END
+
+
+## Compliance Risk Analysis
+
+The project can create a compliance risk report from indexed documents.
+
+### Endpoint
+
+`POST /documents/analyze-risk`
+
+Example request:
+
+```json
+{
+  "query": "What are the vendor compliance requirements?",
+  "top_k": 5
+}
+```
+
+### How It Works
+
+```text
+Retrieve relevant document chunks
+→ Detect compliance signals
+→ Collect evidence
+→ Calculate a risk score
+→ LangGraph decides whether an LLM summary is needed
+→ Gemini generates a grounded risk summary
+```
+
+### Detected Compliance Signals
+
+- Data breach reporting
+- Confidentiality clauses
+- Encryption of sensitive data
+- Contract termination for non-compliance
+
+### Safety
+
+If no compliance signals are found, the API returns a low-risk empty report and Gemini is not called.

@@ -9,7 +9,12 @@ from app.services.document_parser import extract_text_from_file
 from app.services.rag_graph import run_rag_graph
 from app.services.text_chunker import chunk_text
 from app.services.vector_store import index_chunks_file, search_similar_chunks
-
+from app.services.risk_analyzer import analyze_compliance_risk
+from app.services.langchain_rag import (
+    generate_langchain_answer,
+    generate_risk_summary,
+)
+from app.services.risk_graph import run_risk_graph
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
 UPLOAD_DIR = Path("uploads")
@@ -35,6 +40,10 @@ class SearchRequest(BaseModel):
 
 class AskRequest(BaseModel):
     question: str
+    top_k: int = 5
+
+class RiskAnalysisRequest(BaseModel):
+    query: str
     top_k: int = 5
 
 
@@ -206,3 +215,16 @@ def ask_document_question(request: AskRequest):
     )
 
     return result
+
+@router.post("/analyze-risk")
+def analyze_document_risk(request: RiskAnalysisRequest):
+    if not request.query.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Risk analysis query cannot be empty.",
+        )
+
+    return run_risk_graph(
+        query=request.query,
+        top_k=request.top_k,
+    )
