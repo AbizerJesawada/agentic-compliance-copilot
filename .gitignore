@@ -19,6 +19,7 @@ backend/chunks/
 backend/chroma_db/
 backend/.env
 .env
+backend/review_queue/
 # OS / editor
 .DS_Store
 .vscode/

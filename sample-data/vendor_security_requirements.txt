@@ -1,0 +1,15 @@
+Vendor Security and Compliance Requirements
+
+All vendors must report data breaches within 72 hours.
+
+Vendor contracts must include confidentiality clauses.
+
+Vendors must encrypt sensitive data before storing or transmitting it.
+
+Vendors must complete an annual independent security audit and provide the audit report to the company.
+
+Vendors must delete customer data within 30 days after contract termination.
+
+Vendors must maintain and test a disaster recovery plan at least once every year.
+
+The company may terminate vendor contracts if compliance requirements are not met.

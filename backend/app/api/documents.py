@@ -15,6 +15,15 @@ from app.services.langchain_rag import (
     generate_risk_summary,
 )
 from app.services.risk_graph import run_risk_graph
+from app.services.control_discovery import discover_additional_controls
+from app.services.rag_answer import build_context_from_matches
+from app.services.risk_analyzer import analyze_compliance_risk
+from app.services.control_review import (
+    list_controls,
+    review_control,
+    save_pending_controls,
+)
+
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
 UPLOAD_DIR = Path("uploads")
@@ -45,6 +54,16 @@ class AskRequest(BaseModel):
 class RiskAnalysisRequest(BaseModel):
     query: str
     top_k: int = 5
+
+class ControlDiscoveryRequest(BaseModel):
+    query: str
+    top_k: int = 5
+
+class ControlReviewRequest(BaseModel):
+    control_id: str
+    decision: str
+    reviewer: str
+    review_note: str | None = None
 
 
 def get_extraction_warning(extracted_text: str) -> str | None:
@@ -228,3 +247,78 @@ def analyze_document_risk(request: RiskAnalysisRequest):
         query=request.query,
         top_k=request.top_k,
     )
+
+@router.post("/discover-controls")
+def discover_document_controls(request: ControlDiscoveryRequest):
+    if not request.query.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Discovery query cannot be empty.",
+        )
+
+    search_result = search_similar_chunks(
+        query=request.query,
+        top_k=request.top_k,
+    )
+
+    matches = search_result["matches"]
+
+    known_analysis = analyze_compliance_risk(
+        matches=matches,
+    )
+
+    context = build_context_from_matches(matches)
+
+    try:
+        additional_controls = discover_additional_controls(
+            context=context,
+            known_signals=known_analysis["signals_found"],
+        )
+        discovery_error = None
+    except Exception as error:
+        additional_controls = []
+        discovery_error = str(error)
+
+    saved_pending_controls = []
+
+    if additional_controls:
+        saved_pending_controls = save_pending_controls(
+        discovered_controls=additional_controls,
+        query=request.query,
+    )
+
+    return {
+    "query": request.query,
+    "retrieved_chunk_count": len(matches),
+    "known_signals": known_analysis["signals_found"],
+    "additional_controls": additional_controls,
+    "saved_pending_controls": saved_pending_controls,
+    "discovery_error": discovery_error,
+}
+
+@router.get("/controls/review")
+def get_controls_for_review(status: str | None = None):
+    return {
+        "controls": list_controls(status=status),
+    }
+
+
+@router.post("/controls/review")
+def review_discovered_control(request: ControlReviewRequest):
+    try:
+        reviewed_control = review_control(
+            control_id=request.control_id,
+            decision=request.decision,
+            reviewer=request.reviewer,
+            review_note=request.review_note,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        )
+
+    return {
+        "message": "Control reviewed successfully.",
+        "control": reviewed_control,
+    }

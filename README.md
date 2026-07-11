@@ -204,3 +204,28 @@ Retrieve relevant document chunks
 ### Safety
 
 If no compliance signals are found, the API returns a low-risk empty report and Gemini is not called.
+
+
+## Automatic Control Discovery and Human Review
+
+The system can discover additional compliance controls that are not included in the predefined `RISK_RULES`.
+
+### Discovery Workflow
+
+```text
+Retrieve relevant document chunks
+→ Detect known controls using rule-based analysis
+→ Gemini identifies additional controls with exact evidence
+→ Save each suggestion as pending_review
+→ Human approves or rejects the suggestion
+```
+
+### Endpoints
+
+- `POST /documents/discover-controls` - discovers additional controls from indexed documents.
+- `GET /documents/controls/review` - lists saved controls, with an optional status filter.
+- `POST /documents/controls/review` - approves or rejects one pending control.
+
+### Human Approval
+
+Gemini suggestions are saved with `pending_review` status. A reviewer can approve or reject each control, and the system stores the reviewer name, note, and review timestamp.
