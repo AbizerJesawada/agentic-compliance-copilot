@@ -5,24 +5,23 @@ from uuid import uuid4
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from app.services.document_parser import extract_text_from_file
-from app.services.rag_graph import run_rag_graph
-from app.services.text_chunker import chunk_text
-from app.services.vector_store import index_chunks_file, search_similar_chunks
-from app.services.risk_analyzer import analyze_compliance_risk
-from app.services.langchain_rag import (
-    generate_langchain_answer,
-    generate_risk_summary,
-)
-from app.services.risk_graph import run_risk_graph
 from app.services.control_discovery import discover_additional_controls
-from app.services.rag_answer import build_context_from_matches
-from app.services.risk_analyzer import analyze_compliance_risk
 from app.services.control_review import (
     list_controls,
     review_control,
     save_pending_controls,
 )
+from app.services.document_parser import extract_text_from_file
+from app.services.rag_answer import build_context_from_matches
+from app.services.rag_graph import run_rag_graph
+from app.services.risk_analyzer import analyze_compliance_risk
+from app.services.risk_graph import run_risk_graph
+from app.services.text_chunker import (
+    chunk_text,
+    chunk_text_by_paragraphs,
+)
+from app.services.vector_store import index_chunks_file, search_similar_chunks
+from app.services.hybrid_retriever import hybrid_search
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -36,6 +35,7 @@ class ChunkRequest(BaseModel):
     extracted_text_path: str
     chunk_size: int = 1000
     chunk_overlap: int = 200
+    chunking_method: str = "fixed"
 
 
 class IndexRequest(BaseModel):
@@ -51,13 +51,16 @@ class AskRequest(BaseModel):
     question: str
     top_k: int = 5
 
+
 class RiskAnalysisRequest(BaseModel):
     query: str
     top_k: int = 5
 
+
 class ControlDiscoveryRequest(BaseModel):
     query: str
     top_k: int = 5
+
 
 class ControlReviewRequest(BaseModel):
     control_id: str
@@ -146,14 +149,30 @@ def chunk_document(request: ChunkRequest):
 
     text = extracted_text_path.read_text(encoding="utf-8", errors="ignore")
 
-    try:
-        chunks = chunk_text(
+    if request.chunking_method == "fixed":
+        try:
+            chunks = chunk_text(
+                text=text,
+                chunk_size=request.chunk_size,
+                chunk_overlap=request.chunk_overlap,
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error))
+
+    elif request.chunking_method == "paragraph":
+        chunks = chunk_text_by_paragraphs(
             text=text,
             chunk_size=request.chunk_size,
-            chunk_overlap=request.chunk_overlap,
         )
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error))
+
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Unsupported chunking method. "
+                "Use 'fixed' or 'paragraph'."
+            ),
+        )
 
     chunk_records = []
     chunk_previews = []
@@ -164,6 +183,7 @@ def chunk_document(request: ChunkRequest):
             "character_count": len(chunk),
             "text": chunk,
             "source_path": str(extracted_text_path),
+            "chunking_method": request.chunking_method,
         }
 
         chunk_records.append(chunk_record)
@@ -176,7 +196,9 @@ def chunk_document(request: ChunkRequest):
             }
         )
 
-    chunks_filename = f"{extracted_text_path.stem}.json"
+    chunks_filename = (
+        f"{extracted_text_path.stem}_{request.chunking_method}.json"
+    )
     chunks_path = CHUNKS_DIR / chunks_filename
 
     chunks_path.write_text(
@@ -188,6 +210,7 @@ def chunk_document(request: ChunkRequest):
         "message": "Text chunked successfully",
         "source_path": str(extracted_text_path),
         "chunks_path": str(chunks_path),
+        "chunking_method": request.chunking_method,
         "chunk_size": request.chunk_size,
         "chunk_overlap": request.chunk_overlap,
         "chunk_count": len(chunks),
@@ -210,15 +233,34 @@ def index_document_chunks(request: IndexRequest):
 @router.post("/search")
 def search_documents(request: SearchRequest):
     if not request.query.strip():
-        raise HTTPException(status_code=400, detail="Search query cannot be empty.")
+        raise HTTPException(
+            status_code=400,
+            detail="Search query cannot be empty.",
+        )
 
-    result = search_similar_chunks(
+    return search_similar_chunks(
         query=request.query,
         top_k=request.top_k,
     )
 
-    return result
+@router.post("/search-hybrid")
+def search_documents_hybrid(request: SearchRequest):
+    if not request.query.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Search query cannot be empty.",
+        )
 
+    try:
+        return hybrid_search(
+            query=request.query,
+            top_k=request.top_k,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        )
 
 @router.post("/ask")
 def ask_document_question(request: AskRequest):
@@ -228,12 +270,11 @@ def ask_document_question(request: AskRequest):
             detail="Question cannot be empty.",
         )
 
-    result = run_rag_graph(
+    return run_rag_graph(
         question=request.question,
         top_k=request.top_k,
     )
 
-    return result
 
 @router.post("/analyze-risk")
 def analyze_document_risk(request: RiskAnalysisRequest):
@@ -247,6 +288,7 @@ def analyze_document_risk(request: RiskAnalysisRequest):
         query=request.query,
         top_k=request.top_k,
     )
+
 
 @router.post("/discover-controls")
 def discover_document_controls(request: ControlDiscoveryRequest):
@@ -283,18 +325,19 @@ def discover_document_controls(request: ControlDiscoveryRequest):
 
     if additional_controls:
         saved_pending_controls = save_pending_controls(
-        discovered_controls=additional_controls,
-        query=request.query,
-    )
+            discovered_controls=additional_controls,
+            query=request.query,
+        )
 
     return {
-    "query": request.query,
-    "retrieved_chunk_count": len(matches),
-    "known_signals": known_analysis["signals_found"],
-    "additional_controls": additional_controls,
-    "saved_pending_controls": saved_pending_controls,
-    "discovery_error": discovery_error,
-}
+        "query": request.query,
+        "retrieved_chunk_count": len(matches),
+        "known_signals": known_analysis["signals_found"],
+        "additional_controls": additional_controls,
+        "saved_pending_controls": saved_pending_controls,
+        "discovery_error": discovery_error,
+    }
+
 
 @router.get("/controls/review")
 def get_controls_for_review(status: str | None = None):

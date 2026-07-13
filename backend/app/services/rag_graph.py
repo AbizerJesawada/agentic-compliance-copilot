@@ -4,7 +4,7 @@ from langgraph.graph import END, START, StateGraph
 
 from app.services.langchain_rag import generate_langchain_answer
 from app.services.rag_answer import generate_grounded_answer
-from app.services.vector_store import search_similar_chunks
+from app.services.hybrid_retriever import hybrid_search
 
 
 class RAGGraphState(TypedDict):
@@ -21,7 +21,7 @@ class RAGGraphState(TypedDict):
 
 
 def retrieve_context_node(state: RAGGraphState) -> RAGGraphState:
-    search_result = search_similar_chunks(
+    search_result = hybrid_search(
         query=state["question"],
         top_k=state["top_k"],
     )

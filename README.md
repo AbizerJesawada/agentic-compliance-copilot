@@ -229,3 +229,32 @@ Retrieve relevant document chunks
 ### Human Approval
 
 Gemini suggestions are saved with `pending_review` status. A reviewer can approve or reject each control, and the system stores the reviewer name, note, and review timestamp.
+
+
+## Chunking and Hybrid Retrieval
+
+The project supports multiple chunking strategies:
+
+- `fixed` - splits text by character size with overlap.
+- `paragraph` - keeps headings, paragraphs, and sentences together where possible.
+
+Paragraph-aware chunking is useful for structured compliance policies because it keeps each policy heading with its related requirement text.
+
+### Hybrid Search
+
+`POST /documents/search-hybrid` combines:
+
+```text
+Semantic similarity from ChromaDB
++ exact keyword matching
+→ hybrid reranking
+```
+
+The hybrid result includes:
+
+- `semantic_score`
+- `keyword_score`
+- `hybrid_score`
+- `retrieval_reason`
+
+The normal `/documents/ask` workflow uses hybrid search before LangGraph and Gemini generate a grounded answer.

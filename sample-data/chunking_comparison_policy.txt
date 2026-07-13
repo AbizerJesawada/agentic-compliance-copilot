@@ -1,0 +1,15 @@
+Data Breach Reporting
+
+Vendors must report any confirmed data breach to the company within 72 hours. The report must include the affected systems, the type of data involved, the estimated number of affected people, and the actions taken to contain the incident. Vendors must provide updated information until the incident is resolved.
+
+Data Encryption
+
+Vendors must encrypt sensitive customer data when storing it and when transmitting it between systems. Encryption keys must be managed securely and access to those keys must be limited to authorized personnel. Vendors must notify the company if encryption controls fail or if unauthorized access is suspected.
+
+Security Audits
+
+Vendors must complete an independent security audit every year. The audit report must be provided to the company when requested. Any high-severity audit finding must have a documented remediation plan, an owner, and a target completion date.
+
+Data Retention and Deletion
+
+Vendors must delete customer data within 30 days after contract termination unless a legal requirement requires longer retention. The vendor must provide written confirmation that the deletion was completed. Backup copies must also be deleted according to the agreed retention schedule.
