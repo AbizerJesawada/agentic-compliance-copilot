@@ -20,6 +20,7 @@ backend/chroma_db/
 backend/.env
 .env
 backend/review_queue/
+backend/evaluation_reports/
 # OS / editor
 .DS_Store
 .vscode/

@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
-
+from time import perf_counter
 from app.services.control_discovery import discover_additional_controls
 from app.services.control_review import (
     list_controls,
@@ -17,25 +17,33 @@ from app.services.rag_graph import run_rag_graph
 from app.services.risk_analyzer import analyze_compliance_risk
 from app.services.risk_graph import run_risk_graph
 from app.services.text_chunker import (
+    chunk_csv_rows,
     chunk_text,
     chunk_text_by_paragraphs,
 )
 from app.services.vector_store import index_chunks_file, search_similar_chunks
 from app.services.hybrid_retriever import hybrid_search
+from app.services.rag_evaluator import (
+    evaluate_rag_answer,
+    list_evaluation_reports,
+    save_evaluation_report,
+)
+from app.services.document_strategy import recommend_chunking_strategy
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
 UPLOAD_DIR = Path("uploads")
 EXTRACTED_TEXT_DIR = Path("extracted_text")
 CHUNKS_DIR = Path("chunks")
-ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt", ".csv"}
+EVALUATION_CASES_PATH = Path("../sample-data/rag_evaluation_cases.json")
 
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt", ".csv"}
 
 class ChunkRequest(BaseModel):
     extracted_text_path: str
     chunk_size: int = 1000
     chunk_overlap: int = 200
-    chunking_method: str = "fixed"
+    chunking_method: str = "auto"
 
 
 class IndexRequest(BaseModel):
@@ -87,6 +95,18 @@ def get_extraction_warning(extracted_text: str) -> str | None:
 
     return None
 
+def get_original_file_extension(
+    extracted_text_path: Path,
+) -> str:
+    uploaded_files = list(
+        UPLOAD_DIR.glob(f"{extracted_text_path.stem}.*")
+    )
+
+    if not uploaded_files:
+        return ".txt"
+
+    return uploaded_files[0].suffix.lower()
+
 
 @router.post("/upload")
 async def upload_document(file: UploadFile = File(...)):
@@ -120,6 +140,10 @@ async def upload_document(file: UploadFile = File(...)):
     extracted_text_path.write_text(extracted_text, encoding="utf-8")
 
     extraction_warning = get_extraction_warning(extracted_text)
+    recommended_strategy = recommend_chunking_strategy(
+    file_extension=file_extension,
+    extracted_text=extracted_text,
+)
 
     return {
         "message": "Document uploaded and parsed successfully",
@@ -132,6 +156,7 @@ async def upload_document(file: UploadFile = File(...)):
         "character_count": len(extracted_text),
         "text_preview": extracted_text[:500],
         "extraction_warning": extraction_warning,
+        "recommended_strategy": recommended_strategy,
     }
 
 
@@ -147,31 +172,52 @@ def chunk_document(request: ChunkRequest):
 
     CHUNKS_DIR.mkdir(exist_ok=True)
 
-    text = extracted_text_path.read_text(encoding="utf-8", errors="ignore")
+    text = extracted_text_path.read_text(
+        encoding="utf-8",
+        errors="ignore",
+    )
+    selected_chunking_method = request.chunking_method
+    strategy = None
 
-    if request.chunking_method == "fixed":
-        try:
+    if selected_chunking_method == "auto":
+        original_file_extension = get_original_file_extension(
+        extracted_text_path
+    )
+
+        strategy = recommend_chunking_strategy(
+        file_extension=original_file_extension,
+        extracted_text=text,
+    )
+
+        selected_chunking_method = strategy["chunking_method"]
+
+    try:
+        if selected_chunking_method == "fixed":
             chunks = chunk_text(
                 text=text,
                 chunk_size=request.chunk_size,
                 chunk_overlap=request.chunk_overlap,
             )
-        except ValueError as error:
-            raise HTTPException(status_code=400, detail=str(error))
 
-    elif request.chunking_method == "paragraph":
-        chunks = chunk_text_by_paragraphs(
-            text=text,
-            chunk_size=request.chunk_size,
-        )
+        elif selected_chunking_method == "paragraph":
+            chunks = chunk_text_by_paragraphs(
+                text=text,
+                chunk_size=request.chunk_size,
+            )
 
-    else:
+        elif selected_chunking_method == "csv_rows":
+            chunks = chunk_csv_rows(text=text)
+
+        else:
+            raise ValueError(
+                "Unsupported chunking method. "
+                "Use 'auto', 'fixed', 'paragraph', or 'csv_rows'."
+            )
+
+    except ValueError as error:
         raise HTTPException(
             status_code=400,
-            detail=(
-                "Unsupported chunking method. "
-                "Use 'fixed' or 'paragraph'."
-            ),
+            detail=str(error),
         )
 
     chunk_records = []
@@ -197,7 +243,7 @@ def chunk_document(request: ChunkRequest):
         )
 
     chunks_filename = (
-        f"{extracted_text_path.stem}_{request.chunking_method}.json"
+        f"{extracted_text_path.stem}_{selected_chunking_method}.json"
     )
     chunks_path = CHUNKS_DIR / chunks_filename
 
@@ -207,16 +253,17 @@ def chunk_document(request: ChunkRequest):
     )
 
     return {
-        "message": "Text chunked successfully",
-        "source_path": str(extracted_text_path),
-        "chunks_path": str(chunks_path),
-        "chunking_method": request.chunking_method,
-        "chunk_size": request.chunk_size,
-        "chunk_overlap": request.chunk_overlap,
-        "chunk_count": len(chunks),
-        "chunks": chunk_previews,
-    }
-
+    "message": "Text chunked successfully",
+    "source_path": str(extracted_text_path),
+    "chunks_path": str(chunks_path),
+    "requested_chunking_method": request.chunking_method,
+    "chunking_method": selected_chunking_method,
+    "strategy": strategy,
+    "chunk_size": request.chunk_size,
+    "chunk_overlap": request.chunk_overlap,
+    "chunk_count": len(chunks),
+    "chunks": chunk_previews,
+}
 
 @router.post("/index")
 def index_document_chunks(request: IndexRequest):
@@ -364,4 +411,91 @@ def review_discovered_control(request: ControlReviewRequest):
     return {
         "message": "Control reviewed successfully.",
         "control": reviewed_control,
+    }
+
+@router.post("/evaluate-rag")
+def evaluate_rag_system():
+    if not EVALUATION_CASES_PATH.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="RAG evaluation cases file was not found.",
+        )
+
+    try:
+        evaluation_cases = json.loads(
+            EVALUATION_CASES_PATH.read_text(encoding="utf-8")
+        )
+    except json.JSONDecodeError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Evaluation cases file has invalid JSON: {str(error)}",
+        )
+
+    results = []
+
+    for case in evaluation_cases:
+        start_time = perf_counter()
+
+        rag_result = run_rag_graph(
+            question=case["question"],
+            top_k=3,
+        )
+
+        response_time_ms = round(
+            (perf_counter() - start_time) * 1000,
+            2,
+        )
+
+        evaluation = evaluate_rag_answer(
+            question=case["question"],
+            answer=rag_result["answer"],
+            expected_keywords=case["expected_keywords"],
+            confidence=rag_result["confidence"],
+            retrieved_chunk_count=rag_result["retrieved_chunk_count"],
+        )
+
+        results.append(
+            {
+                "case_id": case["id"],
+                "response_time_ms": response_time_ms,
+                **evaluation,
+            }
+        )
+
+    passed_count = sum(
+        1 for result in results if result["passed"]
+    )
+
+    total_cases = len(results)
+    pass_rate = (
+        round(passed_count / total_cases, 2)
+        if total_cases
+        else 0.0
+    )
+
+    report = {
+    "total_cases": total_cases,
+    "passed_cases": passed_count,
+    "failed_cases": total_cases - passed_count,
+    "pass_rate": pass_rate,
+    "results": results,
+}
+
+    report_path = save_evaluation_report(report)
+
+    return {
+    **report,
+    "report_path": report_path,
+}
+
+@router.get("/evaluation-reports")
+def get_evaluation_reports(limit: int = 10):
+    if limit < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Limit must be at least 1.",
+        )
+
+    return {
+        "reports": list_evaluation_reports(limit=limit),
     }

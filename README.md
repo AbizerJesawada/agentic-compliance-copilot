@@ -1,260 +1,175 @@
-# Agentic Enterprise Compliance Copilot
+# Agentic Compliance Copilot
 
-An MCP-enabled agentic AI system for enterprise compliance analysis using RAG, LangChain, LangGraph, LlamaIndex, FastAPI, Next.js, PostgreSQL, and Chroma.
+An enterprise-focused AI application that helps compliance teams upload policy documents, search requirements, answer grounded questions, analyze risks, discover missing controls, and review AI findings.
 
-## Goal
+## Problem
 
-This project helps companies analyze internal policies, contracts, SOPs, vendor agreements, and audit documents. Users can upload documents, ask compliance questions, detect risks, retrieve cited evidence, and generate audit-ready reports.
+Compliance documents are long, unstructured, and difficult to search. Important requirements can be hidden in PDFs, contracts, policy documents, or vendor CSV files.
+
+This project uses RAG, LangChain, LangGraph, ChromaDB, Gemini, hybrid retrieval, and human review workflows to make compliance information easier to find and verify.
+
+## Main Features
+
+- Upload PDF, DOCX, TXT, and CSV documents
+- Extract text and save it locally
+- Fixed-size, paragraph-aware, and CSV row-aware chunking
+- Automatic document strategy routing
+- ChromaDB vector indexing and semantic search
+- Hybrid search using semantic similarity and keyword matching
+- LangChain and Gemini grounded answers with source citations
+- LangGraph workflow for RAG and risk-analysis decisions
+- Rule-based compliance risk analysis
+- AI discovery of additional compliance controls
+- Human approval or rejection of AI-discovered controls
+- RAG evaluation suite with pass rate, keyword coverage, and response time
+- Saved evaluation report history
+
+## Architecture
+
+```text
+Document Upload
+    ↓
+Text Extraction
+    ↓
+Automatic Strategy Router
+    ↓
+Fixed / Paragraph / CSV Row Chunking
+    ↓
+ChromaDB Vector Index
+    ↓
+Hybrid Retrieval
+    ↓
+LangGraph Workflow
+    ↓
+LangChain + Gemini Answer or Risk Summary
+    ↓
+Sources, Confidence, Evaluation, and Human Review
+```
 
 ## Tech Stack
 
-- Frontend: Next.js
 - Backend: FastAPI
-- Database: PostgreSQL
-- Vector Database: Chroma
-- RAG / Indexing: LlamaIndex
-- LLM Tools and Prompts: LangChain
-- Agent Workflow: LangGraph
-- Tool Protocol: MCP
+- Frontend: Next.js and Tailwind CSS
+- LLM framework: LangChain
+- Agent workflow: LangGraph
+- LLM: Google Gemini
+- Vector database: ChromaDB
+- Embeddings: Sentence Transformers
+- Document processing: PyMuPDF, python-docx, CSV parsing
+- Version control: Git and GitHub
 
-## Day 1 Status
+## Run the Backend
 
-- Project structure created
-- FastAPI backend initialized
-- Backend `/health` endpoint working
-- Next.js frontend initialized
-- Basic homepage created
+Open a terminal inside the `backend` folder.
 
-## Day 2 Status
+```powershell
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn app.main:app --reload --reload-dir app
+```
 
-- Added document upload API: `POST /documents/upload`
-- Added file validation for PDF, DOCX, TXT, and CSV files
-- Added document text extraction for TXT, CSV, PDF, and DOCX
-- Added extracted text saving in `backend/extracted_text/`
-- Added original file saving in `backend/uploads/`
-- Added clean error handling for failed text extraction
-
-## Current Backend APIs
-
-- `GET /health` - checks if the backend is running
-- `POST /documents/upload` - uploads a document, validates file type, saves the original file, extracts text, and saves extracted text
-
-## Day 3 Status
-
-- Improved PDF extraction using PyMuPDF
-- Added extraction quality warning for low-quality/scanned PDFs
-- Added text chunking service with chunk size and overlap
-- Added chunking API: `POST /documents/chunk`
-- Added chunk JSON saving in `backend/chunks/`
-
-## Current Backend APIs
-
-- `GET /health` - checks if the backend is running
-- `POST /documents/upload` - uploads a document, validates file type, saves the original file, extracts text, and saves extracted text
-- `POST /documents/chunk` - chunks extracted text and saves chunk data as JSON
-
-## Day 4 Status
-
-- Added Chroma vector database integration
-- Added local SentenceTransformer embeddings using `all-MiniLM-L6-v2`
-- Added chunk indexing API: `POST /documents/index`
-- Added semantic search API: `POST /documents/search`
-- Verified retrieval for compliance question over indexed chunks
-
-- `POST /documents/index` - indexes saved chunk JSON files into Chroma vector database
-- `POST /documents/search` - searches indexed chunks using semantic similarity
-
-## Day 5: Basic RAG Answer API
-
-Today we added the first version of the RAG answer system.
-
-Completed:
-- Added `backend/app/services/rag_answer.py`
-- Added `/documents/ask` endpoint
-- Added extractive answer generation from retrieved chunks
-- Added best sentence selection to avoid returning full chunks
-- Added source citations
-- Added `answer_type`, `confidence`, and `retrieved_chunk_count`
-- Added duplicate retrieved chunk removal
-
-Current `/documents/ask` flow:
+Open Swagger API documentation:
 
 ```text
-User question
-    ↓
-Semantic search in ChromaDB
-    ↓
-Remove duplicate chunks
-    ↓
-Select best sentence from top chunk
-    ↓
-Return answer with sources
+http://127.0.0.1:8000/docs
+```
 
-Additional improvements:
-- Added confidence scoring based on vector distance.
-- Added low-confidence guardrail to avoid answering unrelated questions.
-- If retrieval confidence is low, the system returns: "I could not find relevant information in the indexed documents."
+## Document Processing Workflow
 
+1. Upload a document with `POST /documents/upload`
+2. Copy `extracted_text_path` from the response
+3. Create chunks with `POST /documents/chunk`
+4. Index chunks with `POST /documents/index`
+5. Search with `POST /documents/search-hybrid`
+6. Ask grounded questions with `POST /documents/ask`
 
-## Day 6: LangChain + Gemini RAG
-
-Today we upgraded `/documents/ask` from extractive RAG to LLM-based generative RAG using LangChain and Gemini.
-
-Completed:
-- Installed LangChain packages.
-- Added Gemini API integration using `langchain-google-genai`.
-- Created `backend/app/services/langchain_rag.py`.
-- Added a strict compliance RAG prompt.
-- Sent retrieved document context and user question to Gemini through LangChain.
-- Returned generative answers when retrieval confidence is high or medium.
-- Kept extractive fallback when Gemini fails or retrieval confidence is low.
-- Added `llm_error` field for debugging LLM failures.
-- Verified low-confidence questions skip the LLM and return a safe refusal.
-
-Current `/documents/ask` flow:
-
-```text
-User question
-    ↓
-Semantic search in ChromaDB
-    ↓
-Remove duplicate chunks
-    ↓
-Calculate confidence from vector distance
-    ↓
-If confidence is low:
-        return safe refusal
-    ↓
-If confidence is medium/high:
-        send context + question to LangChain
-    ↓
-Gemini generates grounded answer
-    ↓
-Return answer with citations
-
-
-## Day 7: LangGraph Agent Workflow
-
-Today we converted the RAG answer flow into a LangGraph workflow.
-
-Completed:
-- Installed LangGraph.
-- Created `backend/app/services/rag_graph.py`.
-- Added graph state using `TypedDict`.
-- Added separate workflow nodes:
-  - `retrieve_context`
-  - `prepare_answer`
-  - `safe_refusal`
-  - `generate_answer`
-- Added conditional routing with `route_by_confidence`.
-- Updated `/documents/ask` to call `run_rag_graph()`.
-- Tested both graph paths:
-  - medium/high confidence → LangChain + Gemini answer
-  - low confidence → safe refusal
-
-Current graph:
-
-```text
-START
-    ↓
-retrieve_context
-    ↓
-prepare_answer
-    ↓
-route_by_confidence
-    ├── low confidence → safe_refusal → END
-    └── medium/high confidence → generate_answer → END
-
-
-## Compliance Risk Analysis
-
-The project can create a compliance risk report from indexed documents.
-
-### Endpoint
-
-`POST /documents/analyze-risk`
-
-Example request:
+For automatic chunking:
 
 ```json
 {
-  "query": "What are the vendor compliance requirements?",
-  "top_k": 5
+  "extracted_text_path": "extracted_text/example.txt",
+  "chunking_method": "auto"
 }
 ```
 
-### How It Works
+Automatic strategy selection:
+
+- Clean TXT, DOCX, and text-based PDF: `paragraph`
+- Low-quality or scanned PDF text: `fixed` with OCR warning
+- CSV files: `csv_rows`
+
+## RAG Evaluation
+
+Evaluation cases are stored in:
 
 ```text
-Retrieve relevant document chunks
-→ Detect compliance signals
-→ Collect evidence
-→ Calculate a risk score
-→ LangGraph decides whether an LLM summary is needed
-→ Gemini generates a grounded risk summary
+sample-data/rag_evaluation_cases.json
 ```
 
-### Detected Compliance Signals
-
-- Data breach reporting
-- Confidentiality clauses
-- Encryption of sensitive data
-- Contract termination for non-compliance
-
-### Safety
-
-If no compliance signals are found, the API returns a low-risk empty report and Gemini is not called.
-
-
-## Automatic Control Discovery and Human Review
-
-The system can discover additional compliance controls that are not included in the predefined `RISK_RULES`.
-
-### Discovery Workflow
+Run the evaluation suite:
 
 ```text
-Retrieve relevant document chunks
-→ Detect known controls using rule-based analysis
-→ Gemini identifies additional controls with exact evidence
-→ Save each suggestion as pending_review
-→ Human approves or rejects the suggestion
+POST /documents/evaluate-rag
 ```
 
-### Endpoints
+Each run checks:
 
-- `POST /documents/discover-controls` - discovers additional controls from indexed documents.
-- `GET /documents/controls/review` - lists saved controls, with an optional status filter.
-- `POST /documents/controls/review` - approves or rejects one pending control.
+- Expected facts found in the answer
+- Keyword coverage
+- Retrieval confidence
+- Retrieved chunk count
+- Response time
+- Pass or fail result
 
-### Human Approval
-
-Gemini suggestions are saved with `pending_review` status. A reviewer can approve or reject each control, and the system stores the reviewer name, note, and review timestamp.
-
-
-## Chunking and Hybrid Retrieval
-
-The project supports multiple chunking strategies:
-
-- `fixed` - splits text by character size with overlap.
-- `paragraph` - keeps headings, paragraphs, and sentences together where possible.
-
-Paragraph-aware chunking is useful for structured compliance policies because it keeps each policy heading with its related requirement text.
-
-### Hybrid Search
-
-`POST /documents/search-hybrid` combines:
+Evaluation reports are saved in:
 
 ```text
-Semantic similarity from ChromaDB
-+ exact keyword matching
-→ hybrid reranking
+backend/evaluation_reports/
 ```
 
-The hybrid result includes:
+View previous reports:
 
-- `semantic_score`
-- `keyword_score`
-- `hybrid_score`
-- `retrieval_reason`
+```text
+GET /documents/evaluation-reports
+```
 
-The normal `/documents/ask` workflow uses hybrid search before LangGraph and Gemini generate a grounded answer.
+## Important API Endpoints
+
+- `POST /documents/upload`
+- `POST /documents/chunk`
+- `POST /documents/index`
+- `POST /documents/search`
+- `POST /documents/search-hybrid`
+- `POST /documents/ask`
+- `POST /documents/analyze-risk`
+- `POST /documents/discover-controls`
+- `GET /documents/controls/review`
+- `POST /documents/controls/review`
+- `POST /documents/evaluate-rag`
+- `GET /documents/evaluation-reports`
+
+## Sample Data
+
+- `sample-data/chunking_comparison_policy.txt`
+- `sample-data/vendor_security_requirements.txt`
+- `sample-data/vendor_compliance_register.csv`
+- `sample-data/rag_evaluation_cases.json`
+
+## Current Limitations
+
+- Scanned PDFs need OCR for accurate text extraction.
+- Local files and ChromaDB are used during development.
+- Authentication, database persistence, and cloud deployment will be added later.
+
+## Future Improvements
+
+- LlamaIndex ingestion pipeline
+- MCP server and MCP tools
+- Document comparison and policy conflict detection
+- Contract gap analysis
+- User authentication and role-based access
+- Frontend compliance dashboard
+- PostgreSQL persistence, Docker, tests, and CI/CD
+
+## Author
+
+Abizer Jesawada

@@ -1,0 +1,4 @@
+vendor_name,audit_frequency,encryption_required,data_deletion_days,risk_level
+Acme Corp,annual,yes,30,high
+Beta Ltd,quarterly,yes,60,medium
+Gamma Services,annual,no,30,high

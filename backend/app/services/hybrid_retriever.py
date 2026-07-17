@@ -29,16 +29,32 @@ STOP_WORDS = {
 }
 
 
+def normalize_keyword(word: str) -> str:
+    if word.endswith("ies") and len(word) > 4:
+        return f"{word[:-3]}y"
+
+    if (
+        word.endswith("s")
+        and not word.endswith("ss")
+        and len(word) > 3
+    ):
+        return word[:-1]
+
+    return word
+
+
 def extract_keywords(text: str) -> set[str]:
+    cleaned_text = text.lower().replace("_", " ")
+
     words = re.findall(
-    r"\b(?:[a-zA-Z]{3,}|\d+)\b",
-    text.lower(),
-)
+        r"\b(?:[a-zA-Z]{3,}|\d+)\b",
+        cleaned_text,
+    )
 
     return {
-        word
+        normalize_keyword(word)
         for word in words
-        if word not in STOP_WORDS
+        if normalize_keyword(word) not in STOP_WORDS
     }
 
 

@@ -1,5 +1,6 @@
 import re
-
+import csv
+from io import StringIO
 
 def chunk_text(
     text: str,
@@ -158,5 +159,71 @@ def chunk_text_by_paragraphs(
 
     if current_chunk:
         chunks.append(current_chunk.strip())
+
+    return chunks
+
+def chunk_csv_rows(text: str) -> list[str]:
+    cleaned_text = text.strip()
+
+    if not cleaned_text:
+        return []
+
+    lines = [
+        line.strip()
+        for line in cleaned_text.splitlines()
+        if line.strip()
+    ]
+
+    if len(lines) >= 2 and "|" in lines[0]:
+        headers = [
+            header.strip()
+            for header in lines[0].split("|")
+        ]
+
+        chunks = []
+
+        for row_number, line in enumerate(lines[1:], start=1):
+            values = [
+                value.strip()
+                for value in line.split("|")
+            ]
+
+            if len(headers) != len(values):
+                raise ValueError(
+                    "CSV row has a different number of values than headers."
+                )
+
+            row_parts = [f"CSV row: {row_number}"]
+
+            for header, value in zip(headers, values):
+                if value:
+                    row_parts.append(f"{header}: {value}")
+
+            chunks.append("\n".join(row_parts))
+
+        return chunks
+
+    reader = csv.DictReader(StringIO(cleaned_text))
+
+    if not reader.fieldnames:
+        raise ValueError(
+            "CSV file must contain a header row."
+        )
+
+    chunks = []
+
+    for row_number, row in enumerate(reader, start=1):
+        row_parts = [f"CSV row: {row_number}"]
+
+        for column_name, value in row.items():
+            cleaned_value = (value or "").strip()
+
+            if cleaned_value:
+                row_parts.append(
+                    f"{column_name}: {cleaned_value}"
+                )
+
+        if len(row_parts) > 1:
+            chunks.append("\n".join(row_parts))
 
     return chunks

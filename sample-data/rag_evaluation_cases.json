@@ -1,0 +1,37 @@
+[
+  {
+    "id": "breach_reporting",
+    "question": "What is the 72-hour breach reporting requirement?",
+    "expected_keywords": [
+      "data breach",
+      "72 hours",
+      "affected systems"
+    ]
+  },
+  {
+    "id": "data_retention",
+    "question": "How long can a vendor keep customer data after a contract ends?",
+    "expected_keywords": [
+      "30 days",
+      "contract termination",
+      "legal requirement"
+    ]
+  },
+  {
+    "id": "encryption",
+    "question": "What encryption requirements apply to vendors?",
+    "expected_keywords": [
+      "encrypt",
+      "sensitive customer data",
+      "transmitting"
+    ]
+  },
+  {
+    "id": "security_audit",
+    "question": "How often must a vendor complete a security audit?",
+    "expected_keywords": [
+      "independent security audit",
+      "every year"
+    ]
+  }
+]
