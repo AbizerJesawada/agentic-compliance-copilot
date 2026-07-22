@@ -170,6 +170,71 @@ GET /documents/evaluation-reports
 - Frontend compliance dashboard
 - PostgreSQL persistence, Docker, tests, and CI/CD
 
-## Author
+## LlamaIndex Retrieval
 
-Abizer Jesawada
+The project includes a second RAG retrieval pipeline using LlamaIndex.
+
+LlamaIndex loads saved chunk JSON files as documents and preserves metadata:
+
+- Source path
+- Chunk index
+- Character count
+- Chunking method
+
+Available endpoints:
+
+- `POST /documents/llamaindex/index`
+- `POST /documents/llamaindex/search`
+- `POST /documents/retrieval-compare`
+
+Example workflow:
+
+1. Create chunks with `POST /documents/chunk`.
+2. Index the chunk JSON with `POST /documents/llamaindex/index`.
+3. Search using `POST /documents/llamaindex/search`.
+4. Compare LlamaIndex retrieval with ChromaDB hybrid retrieval using `POST /documents/retrieval-compare`.
+
+Current behavior: the LlamaIndex index is stored in backend memory. After a backend restart, index the chunk JSON again.
+
+## MCP Server
+
+The project includes an MCP server in `mcp-server/server.py`.
+
+The MCP server exposes the existing FastAPI compliance backend as tools for MCP-compatible AI clients.
+
+Available MCP tools:
+
+- `search_compliance_documents`
+- `ask_compliance_question`
+- `analyze_compliance_risk`
+- `discover_additional_compliance_controls`
+
+Architecture:
+
+AI Client -> MCP Server -> FastAPI Backend -> Retrieval, LangGraph, LangChain, Gemini -> Structured Result
+
+The MCP server does not duplicate RAG logic. It calls existing FastAPI endpoints and returns their structured results.
+
+### Run MCP Locally
+
+1. Start the FastAPI backend:
+
+`python -m uvicorn app.main:app --reload --reload-dir app`
+
+2. Start the MCP Inspector:
+
+`npx -y @modelcontextprotocol/inspector`
+
+3. Select `STDIO` transport.
+
+4. Use this command:
+
+`C:/Users/Abizer/OneDrive/Desktop/agentic-compliance-copilot/backend/.venv/Scripts/python.exe`
+
+5. Use this argument:
+
+`C:/Users/Abizer/OneDrive/Desktop/agentic-compliance-copilot/mcp-server/server.py`
+
+6. Connect and test the available MCP tools.
+
+The MCP server was tested successfully with the MCP Inspector for hybrid document search, grounded answers, and compliance risk analysis.

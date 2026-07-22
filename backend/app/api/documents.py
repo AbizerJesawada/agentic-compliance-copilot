@@ -29,6 +29,10 @@ from app.services.rag_evaluator import (
     save_evaluation_report,
 )
 from app.services.document_strategy import recommend_chunking_strategy
+from app.services.llamaindex_retriever import (
+    index_chunks_with_llamaindex,
+    search_with_llamaindex,
+)
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -176,18 +180,19 @@ def chunk_document(request: ChunkRequest):
         encoding="utf-8",
         errors="ignore",
     )
+
     selected_chunking_method = request.chunking_method
     strategy = None
 
     if selected_chunking_method == "auto":
         original_file_extension = get_original_file_extension(
-        extracted_text_path
-    )
+            extracted_text_path
+        )
 
         strategy = recommend_chunking_strategy(
-        file_extension=original_file_extension,
-        extracted_text=text,
-    )
+            file_extension=original_file_extension,
+            extracted_text=text,
+        )
 
         selected_chunking_method = strategy["chunking_method"]
 
@@ -229,7 +234,7 @@ def chunk_document(request: ChunkRequest):
             "character_count": len(chunk),
             "text": chunk,
             "source_path": str(extracted_text_path),
-            "chunking_method": request.chunking_method,
+            "chunking_method": selected_chunking_method,
         }
 
         chunk_records.append(chunk_record)
@@ -253,16 +258,16 @@ def chunk_document(request: ChunkRequest):
     )
 
     return {
-    "message": "Text chunked successfully",
-    "source_path": str(extracted_text_path),
-    "chunks_path": str(chunks_path),
-    "requested_chunking_method": request.chunking_method,
-    "chunking_method": selected_chunking_method,
-    "strategy": strategy,
-    "chunk_size": request.chunk_size,
-    "chunk_overlap": request.chunk_overlap,
-    "chunk_count": len(chunks),
-    "chunks": chunk_previews,
+        "message": "Text chunked successfully",
+        "source_path": str(extracted_text_path),
+        "chunks_path": str(chunks_path),
+        "requested_chunking_method": request.chunking_method,
+        "chunking_method": selected_chunking_method,
+        "strategy": strategy,
+        "chunk_size": request.chunk_size,
+        "chunk_overlap": request.chunk_overlap,
+        "chunk_count": len(chunks),
+        "chunks": chunk_previews,
 }
 
 @router.post("/index")
@@ -289,6 +294,73 @@ def search_documents(request: SearchRequest):
         query=request.query,
         top_k=request.top_k,
     )
+
+@router.post("/llamaindex/index")
+def index_chunks_with_llamaindex_endpoint(request: IndexRequest):
+    chunks_path = Path(request.chunks_path)
+
+    try:
+        return index_chunks_with_llamaindex(chunks_path)
+    except FileNotFoundError as error:
+        raise HTTPException(
+            status_code=404,
+            detail=str(error),
+        )
+
+
+@router.post("/llamaindex/search")
+def search_documents_with_llamaindex(request: SearchRequest):
+    if not request.query.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Search query cannot be empty.",
+        )
+
+    try:
+        return search_with_llamaindex(
+            query=request.query,
+            top_k=request.top_k,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        )
+
+@router.post("/retrieval-compare")
+def compare_retrieval_methods(request: SearchRequest):
+    if not request.query.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Search query cannot be empty.",
+        )
+
+    try:
+        hybrid_result = hybrid_search(
+            query=request.query,
+            top_k=request.top_k,
+        )
+
+        llamaindex_result = search_with_llamaindex(
+            query=request.query,
+            top_k=request.top_k,
+        )
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        )
+
+    return {
+        "query": request.query,
+        "hybrid_retrieval": {
+            "matches": hybrid_result["matches"],
+        },
+        "llamaindex_retrieval": {
+            "matches": llamaindex_result["matches"],
+        },
+}
 
 @router.post("/search-hybrid")
 def search_documents_hybrid(request: SearchRequest):
