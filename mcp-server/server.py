@@ -37,6 +37,24 @@ def call_backend(path: str, payload: dict) -> dict:
             "backend_url": BACKEND_URL,
         }
 
+@mcp.tool()
+def run_compliance_assistant(
+    query: str,
+    top_k: int = 5,
+) -> dict:
+    """Handle a compliance request by automatically selecting the best workflow.
+
+    Use this for normal document questions, compliance risk requests, or
+    requests to identify additional controls.
+    """
+
+    return call_backend(
+        path="/documents/assistant/query",
+        payload={
+            "query": query,
+            "top_k": top_k,
+        },
+)
 
 @mcp.tool()
 def search_compliance_documents(

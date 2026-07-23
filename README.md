@@ -238,3 +238,117 @@ The MCP server does not duplicate RAG logic. It calls existing FastAPI endpoints
 6. Connect and test the available MCP tools.
 
 The MCP server was tested successfully with the MCP Inspector for hybrid document search, grounded answers, and compliance risk analysis.
+
+## Day 15: Unified Assistant Router
+
+Previously, users had to choose separate endpoints for document questions, risk analysis, and control discovery.
+
+A unified endpoint now handles all three workflows:
+
+```text
+POST /documents/assistant/query
+```
+
+The router reads the user query and selects the correct workflow:
+
+- Direct document question -> RAG question-answering workflow
+- Compliance risk request -> risk-analysis workflow
+- Missing or additional-controls request -> control-discovery workflow
+
+Example request:
+
+```json
+{
+  "query": "Which vendor has quarterly audits?",
+  "top_k": 3
+}
+```
+
+Example routing response fields:
+
+```json
+{
+  "selected_workflow": "question_answering",
+  "routing_reason": "The query does not request risk analysis or control discovery."
+}
+```
+
+The MCP server also exposes this unified workflow through:
+
+```text
+run_compliance_assistant
+```
+
+This allows an MCP-compatible AI client to use one tool while the backend selects the appropriate internal workflow.
+
+## Day 16: Conversation Memory and Answer Feedback
+
+### Conversation Memory
+
+The unified assistant supports optional session-based conversation memory.
+
+```json
+{
+  "query": "Which vendor has quarterly audits?",
+  "session_id": "vendor-review-001"
+}
+```
+
+Use the same `session_id` for every message in one conversation.
+
+Example follow-up request:
+
+```json
+{
+  "query": "Does it require encryption?",
+  "session_id": "vendor-review-001"
+}
+```
+
+The assistant loads recent messages from the same session, allowing it to understand that "it" refers to Beta Ltd.
+
+Conversation history is stored locally during development:
+
+```text
+backend/conversation_data/
+```
+
+### Answer Feedback
+
+Users can submit feedback about assistant answers:
+
+```text
+POST /documents/assistant/feedback
+```
+
+Example request:
+
+```json
+{
+  "session_id": "vendor-review-001",
+  "query": "Does it require encryption?",
+  "helpful": true,
+  "comment": "It correctly identified that Beta Ltd requires encryption."
+}
+```
+
+Saved feedback can be reviewed with:
+
+```text
+GET /documents/assistant/feedback
+```
+
+Optional filters:
+
+```text
+/documents/assistant/feedback?helpful=true
+/documents/assistant/feedback?helpful=false
+```
+
+Feedback is stored locally during development:
+
+```text
+backend/feedback_data/
+```
+
+The local conversation and feedback folders are ignored by Git. In production, these features should use a database, user authentication, and access control.

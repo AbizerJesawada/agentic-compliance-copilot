@@ -33,6 +33,17 @@ from app.services.llamaindex_retriever import (
     index_chunks_with_llamaindex,
     search_with_llamaindex,
 )
+from app.services.assistant_router import classify_assistant_intent
+from app.services.conversation_memory import (
+    format_conversation_history,
+    get_recent_conversation_messages,
+    save_conversation_message,
+)
+from app.services.user_feedback import save_answer_feedback
+from app.services.user_feedback import (
+    list_answer_feedback,
+    save_answer_feedback,
+)
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -80,6 +91,20 @@ class ControlReviewRequest(BaseModel):
     reviewer: str
     review_note: str | None = None
 
+class AssistantQueryRequest(BaseModel):
+    query: str
+    top_k: int = 5
+
+class AssistantQueryRequest(BaseModel):
+    query: str
+    top_k: int = 5
+    session_id: str | None = None
+
+class AnswerFeedbackRequest(BaseModel):
+    session_id: str | None = None
+    query: str
+    helpful: bool
+    comment: str | None = None
 
 def get_extraction_warning(extracted_text: str) -> str | None:
     if len(extracted_text.strip()) < 100:
@@ -457,6 +482,161 @@ def discover_document_controls(request: ControlDiscoveryRequest):
         "discovery_error": discovery_error,
     }
 
+@router.post("/assistant/query")
+def assistant_query(request: AssistantQueryRequest):
+    if not request.query.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Assistant query cannot be empty.",
+        )
+
+    previous_messages = []
+
+    if request.session_id:
+        try:
+            previous_messages = get_recent_conversation_messages(
+                session_id=request.session_id,
+                limit=4,
+            )
+
+            save_conversation_message(
+                session_id=request.session_id,
+                role="user",
+                content=request.query,
+            )
+        except ValueError as error:
+            raise HTTPException(
+                status_code=400,
+                detail=str(error),
+            )
+
+    workflow_query = request.query
+
+    if previous_messages:
+        conversation_history = format_conversation_history(
+            previous_messages
+        )
+
+        workflow_query = (
+            f"Previous conversation:\n{conversation_history}\n\n"
+            f"Current user question: {request.query}"
+        )
+
+    routing = classify_assistant_intent(request.query)
+    intent = routing["intent"]
+
+    if intent == "question_answering":
+        result = run_rag_graph(
+            question=workflow_query,
+            top_k=request.top_k,
+        )
+        result["question"] = request.query
+        assistant_message = result["answer"]
+
+    elif intent == "risk_analysis":
+        result = run_risk_graph(
+            query=workflow_query,
+            top_k=request.top_k,
+        )
+        result["query"] = request.query
+        assistant_message = result.get(
+            "risk_summary",
+            "Compliance risk analysis completed.",
+        )
+
+    else:
+        search_result = search_similar_chunks(
+            query=workflow_query,
+            top_k=request.top_k,
+        )
+        matches = search_result["matches"]
+
+        known_analysis = analyze_compliance_risk(matches=matches)
+        context = build_context_from_matches(matches)
+
+        try:
+            additional_controls = discover_additional_controls(
+                context=context,
+                known_signals=known_analysis["signals_found"],
+            )
+            discovery_error = None
+        except Exception as error:
+            additional_controls = []
+            discovery_error = str(error)
+
+        saved_pending_controls = []
+
+        if additional_controls:
+            saved_pending_controls = save_pending_controls(
+                discovered_controls=additional_controls,
+                query=request.query,
+            )
+
+        result = {
+            "retrieved_chunk_count": len(matches),
+            "known_signals": known_analysis["signals_found"],
+            "additional_controls": additional_controls,
+            "saved_pending_controls": saved_pending_controls,
+            "discovery_error": discovery_error,
+        }
+
+        control_names = [
+            control["control_name"]
+            for control in additional_controls
+        ]
+
+        assistant_message = (
+            "Additional controls discovered: "
+            + ", ".join(control_names)
+            if control_names
+            else "No additional controls were discovered."
+        )
+
+    if request.session_id:
+        save_conversation_message(
+            session_id=request.session_id,
+            role="assistant",
+            content=assistant_message,
+        )
+
+    return {
+        "query": request.query,
+        "session_id": request.session_id,
+        "previous_message_count": len(previous_messages),
+        "history_used": bool(previous_messages),
+        "selected_workflow": intent,
+        "routing_reason": routing["reason"],
+        "result": result,
+}
+
+@router.post("/assistant/feedback")
+def submit_answer_feedback(request: AnswerFeedbackRequest):
+    if not request.query.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Feedback query cannot be empty.",
+        )
+
+    saved_feedback = save_answer_feedback(
+        session_id=request.session_id,
+        query=request.query,
+        helpful=request.helpful,
+        comment=request.comment,
+    )
+
+    return {
+        "message": "Answer feedback saved successfully.",
+        "feedback": saved_feedback,
+}
+
+@router.get("/assistant/feedback")
+def get_answer_feedback(helpful: bool | None = None):
+    feedback_entries = list_answer_feedback(helpful=helpful)
+
+    return {
+        "feedback_count": len(feedback_entries),
+        "feedback": feedback_entries,
+    }
 
 @router.get("/controls/review")
 def get_controls_for_review(status: str | None = None):

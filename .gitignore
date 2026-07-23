@@ -21,6 +21,8 @@ backend/.env
 .env
 backend/review_queue/
 backend/evaluation_reports/
+backend/conversation_data/
+backend/feedback_data/
 # OS / editor
 .DS_Store
 .vscode/
