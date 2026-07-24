@@ -352,3 +352,88 @@ backend/feedback_data/
 ```
 
 The local conversation and feedback folders are ignored by Git. In production, these features should use a database, user authentication, and access control.
+
+
+## Day 17: Frontend Compliance Assistant
+
+Built a Next.js frontend for the Agentic Compliance Copilot.
+
+### Features Added
+
+- Chat workspace for asking compliance questions.
+- Integration with `POST /documents/assistant/query`.
+- Automatic workflow routing:
+  - Question answering uses RAG.
+  - Risk requests use risk analysis.
+  - Missing-control requests use control discovery.
+- Session IDs are created for new conversations.
+- Follow-up questions use the same session ID, allowing the backend to use recent conversation context.
+- Answer details panel displays:
+  - Selected workflow
+  - Routing reason
+  - Source document chunks
+  - Risk information when available
+  - Helpful / not helpful feedback controls
+- Frontend feedback is saved through:
+  - `POST /documents/assistant/feedback`
+- CORS was configured in FastAPI so the frontend at `http://localhost:3000` can call the backend at `http://127.0.0.1:8000`.
+
+### Verification
+
+The frontend was tested with vendor compliance questions. It correctly identified Beta Ltd as the vendor with quarterly audits and used session context to answer follow-up questions about encryption.
+
+---
+
+## Day 18: Conversation History and Reopening Chats
+
+Added persistent conversation history to the backend and frontend.
+
+### Backend Features Added
+
+Conversation messages are stored in separate JSON files:
+
+```text
+backend/conversation_data/<session_id>.json
+```
+
+Each stored message includes:
+
+- `role`: `user` or `assistant`
+- `content`
+- `created_at`
+
+New API endpoints:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /documents/assistant/sessions` | Returns summaries of all saved conversations. |
+| `GET /documents/assistant/sessions/{session_id}` | Returns complete messages for one selected conversation. |
+
+A session summary includes:
+
+- `session_id`
+- `title`: first user question
+- `message_count`
+- `last_message`
+- `updated_at`
+
+### Frontend Features Added
+
+- Previous conversations appear in the left sidebar.
+- Chats are ordered by most recently updated.
+- Each chat uses its first user question as the title.
+- Clicking a saved conversation loads its complete messages.
+- The selected conversation is highlighted.
+- A reopened conversation keeps the same session ID, so users can continue asking context-aware follow-up questions.
+- Conversation messages are lazy loaded: summaries load first, while full messages load only after a user selects a chat.
+
+### Verification
+
+The feature was tested successfully:
+
+1. Created a new conversation.
+2. Asked about data deletion requirements.
+3. Confirmed the new chat appeared first in the history sidebar.
+4. Reopened an earlier Beta Ltd conversation.
+5. Asked, `What is its audit frequency?`
+6. The assistant used the restored context and correctly answered: `quarterly`.

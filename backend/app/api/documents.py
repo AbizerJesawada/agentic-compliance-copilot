@@ -37,6 +37,8 @@ from app.services.assistant_router import classify_assistant_intent
 from app.services.conversation_memory import (
     format_conversation_history,
     get_recent_conversation_messages,
+    list_conversation_sessions,
+    load_conversation,
     save_conversation_message,
 )
 from app.services.user_feedback import save_answer_feedback
@@ -638,11 +640,44 @@ def get_answer_feedback(helpful: bool | None = None):
         "feedback": feedback_entries,
     }
 
+@router.get("/assistant/sessions")
+def get_conversation_sessions():
+    sessions = list_conversation_sessions()
+
+    return {
+        "session_count": len(sessions),
+        "sessions": sessions,
+}
+
+@router.get("/assistant/sessions/{session_id}")
+def get_conversation_session(session_id: str):
+    try:
+        messages = load_conversation(session_id)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        )
+
+    if not messages:
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation session was not found.",
+        )
+
+    return {
+        "session_id": session_id,
+        "message_count": len(messages),
+        "messages": messages,
+}
+
 @router.get("/controls/review")
 def get_controls_for_review(status: str | None = None):
     return {
         "controls": list_controls(status=status),
     }
+
+
 
 
 @router.post("/controls/review")

@@ -79,3 +79,40 @@ def format_conversation_history(messages: list[dict]) -> str:
         formatted_messages.append(f"{role}: {content}")
 
     return "\n".join(formatted_messages)
+
+def list_conversation_sessions() -> list[dict]:
+    if not CONVERSATION_DATA_DIR.exists():
+        return []
+
+    sessions = []
+
+    for session_file in CONVERSATION_DATA_DIR.glob("*.json"):
+        messages = json.loads(session_file.read_text(encoding="utf-8"))
+
+        if not messages:
+            continue
+
+        title = next(
+            (
+                message["content"]
+                for message in messages
+                if message["role"] == "user"
+            ),
+            "Untitled conversation",
+        )
+
+        sessions.append(
+            {
+                "session_id": session_file.stem,
+                "title": title,
+                "message_count": len(messages),
+                "last_message": messages[-1]["content"],
+                "updated_at": messages[-1]["created_at"],
+            }
+        )
+
+    return sorted(
+        sessions,
+        key=lambda session: session["updated_at"],
+        reverse=True,
+    )
