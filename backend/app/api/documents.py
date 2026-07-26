@@ -151,6 +151,7 @@ async def upload_document(file: UploadFile = File(...)):
 
     UPLOAD_DIR.mkdir(exist_ok=True)
     EXTRACTED_TEXT_DIR.mkdir(exist_ok=True)
+    CHUNKS_DIR.mkdir(exist_ok=True)
 
     safe_filename = f"{uuid4()}{file_extension}"
     file_path = UPLOAD_DIR / safe_filename
@@ -168,16 +169,71 @@ async def upload_document(file: UploadFile = File(...)):
 
     extracted_text_filename = f"{file_path.stem}.txt"
     extracted_text_path = EXTRACTED_TEXT_DIR / extracted_text_filename
-    extracted_text_path.write_text(extracted_text, encoding="utf-8")
+    extracted_text_path.write_text(
+        extracted_text,
+        encoding="utf-8",
+    )
 
     extraction_warning = get_extraction_warning(extracted_text)
-    recommended_strategy = recommend_chunking_strategy(
-    file_extension=file_extension,
-    extracted_text=extracted_text,
-)
+
+    strategy = recommend_chunking_strategy(
+        file_extension=file_extension,
+        extracted_text=extracted_text,
+    )
+
+    chunking_method = strategy["chunking_method"]
+
+    try:
+        if chunking_method == "fixed":
+            chunks = chunk_text(text=extracted_text)
+        elif chunking_method == "paragraph":
+            chunks = chunk_text_by_paragraphs(text=extracted_text)
+        elif chunking_method == "csv_rows":
+            chunks = chunk_csv_rows(text=extracted_text)
+        else:
+            chunks = chunk_text(text=extracted_text)
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        )
+
+    chunk_records = []
+
+    for index, chunk in enumerate(chunks):
+        chunk_records.append(
+            {
+                "chunk_index": index,
+                "character_count": len(chunk),
+                "text": chunk,
+                "source_path": str(extracted_text_path),
+                "chunking_method": chunking_method,
+            }
+        )
+
+    chunks_filename = f"{extracted_text_path.stem}_{chunking_method}.json"
+    chunks_path = CHUNKS_DIR / chunks_filename
+
+    chunks_path.write_text(
+        json.dumps(
+            chunk_records,
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    try:
+        index_result = index_chunks_file(chunks_path)
+        index_error = None
+
+    except Exception as error:
+        index_result = None
+        index_error = str(error)
 
     return {
-        "message": "Document uploaded and parsed successfully",
+        "message": "Document uploaded, chunked, and indexed successfully",
         "original_filename": file.filename,
         "saved_filename": safe_filename,
         "content_type": file.content_type,
@@ -187,7 +243,12 @@ async def upload_document(file: UploadFile = File(...)):
         "character_count": len(extracted_text),
         "text_preview": extracted_text[:500],
         "extraction_warning": extraction_warning,
-        "recommended_strategy": recommended_strategy,
+        "recommended_strategy": strategy,
+        "chunking_method": chunking_method,
+        "chunk_count": len(chunks),
+        "chunks_path": str(chunks_path),
+        "index_result": index_result,
+        "index_error": index_error,
     }
 
 

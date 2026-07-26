@@ -1,0 +1,52 @@
+Acceptable Use Policy
+
+1. Purpose
+
+This Acceptable Use Policy defines the rules and guidelines for using company-provided IT resources, including computers, networks, email, and internet access.
+
+2. Scope
+
+This policy applies to all employees, contractors, and third-party vendors who access company systems.
+
+3. Authorized Use
+
+Company resources must be used primarily for business purposes. Limited personal use is permitted as long as it does not interfere with work performance or violate any other policy.
+
+4. Prohibited Activities
+
+Users must not:
+
+- Access, store, or distribute illegal or offensive content
+- Install unauthorized software on company devices
+- Bypass security controls or firewalls
+- Share login credentials with anyone
+- Use company resources for commercial purposes outside the company
+- Download pirated software or media files
+
+5. Email and Communication
+
+All email communications are company property and may be monitored. Users must not send confidential information over unencrypted email. Phishing attempts must be reported immediately to the security team.
+
+6. Password Requirements
+
+Passwords must be at least 12 characters long and include uppercase letters, lowercase letters, numbers, and special characters. Passwords must be changed every 90 days. Multi-factor authentication is required for all remote access.
+
+7. Data Protection
+
+Sensitive company data must not be stored on personal devices. Data must be encrypted when stored on portable media. All data breaches must be reported within 24 hours to the compliance team.
+
+8. Network Security
+
+Personal devices connecting to the company network must have up-to-date antivirus software. Wireless networks must use WPA3 encryption. Guest network access is separate from the corporate network.
+
+9. Remote Work
+
+Remote workers must use a VPN when accessing company systems. Company-issued laptops must have full-disk encryption enabled. Remote desktops must be locked when unattended.
+
+10. Monitoring and Enforcement
+
+The company reserves the right to monitor network traffic, email, and system usage. Violations of this policy may result in disciplinary action, including termination of employment and legal action.
+
+11. Policy Review
+
+This policy is reviewed annually by the compliance team. Users will be notified of any changes at least 30 days before they take effect.
