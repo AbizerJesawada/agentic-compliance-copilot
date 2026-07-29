@@ -53,6 +53,13 @@ function NavBar() {
         >
           Controls
         </Link>
+
+        <Link
+          href="/evaluation"
+          className="rounded-md px-3 py-1.5 text-sm text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-100"
+        >
+          Evaluation
+        </Link>
       </div>
     </nav>
   );
