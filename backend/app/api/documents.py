@@ -28,6 +28,12 @@ from app.services.rag_evaluator import (
     list_evaluation_reports,
     save_evaluation_report,
 )
+from app.services.document_registry import (
+    delete_document,
+    get_document,
+    list_documents,
+    register_document,
+)
 from app.services.document_strategy import recommend_chunking_strategy
 from app.services.llamaindex_retriever import (
     index_chunks_with_llamaindex,
@@ -232,6 +238,16 @@ async def upload_document(file: UploadFile = File(...)):
         index_result = None
         index_error = str(error)
 
+    document_record = register_document(
+        original_filename=file.filename,
+        saved_filename=safe_filename,
+        file_path=file_path,
+        extracted_text_path=extracted_text_path,
+        chunks_path=chunks_path if index_result else None,
+        size_bytes=len(file_content),
+        character_count=len(extracted_text),
+    )
+
     return {
         "message": "Document uploaded, chunked, and indexed successfully",
         "original_filename": file.filename,
@@ -249,6 +265,59 @@ async def upload_document(file: UploadFile = File(...)):
         "chunks_path": str(chunks_path),
         "index_result": index_result,
         "index_error": index_error,
+        "document_id": document_record["id"],
+    }
+
+
+@router.get("")
+def get_all_documents():
+    documents = list_documents()
+
+    return {
+        "document_count": len(documents),
+        "documents": documents,
+    }
+
+
+@router.delete("/{document_id}")
+def delete_uploaded_document(document_id: str):
+    document = get_document(document_id)
+
+    if not document:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found.",
+        )
+
+    file_path = Path(document["file_path"])
+
+    if file_path.exists():
+        file_path.unlink()
+
+    extracted_text_path = Path(document["extracted_text_path"])
+
+    if extracted_text_path.exists():
+        extracted_text_path.unlink()
+
+    chunks_path = document.get("chunks_path")
+
+    if chunks_path:
+        chunks_file = Path(chunks_path)
+
+        if chunks_file.exists():
+            chunks_file.unlink()
+
+    deleted = delete_document(document_id)
+
+    if not deleted:
+        raise HTTPException(
+            status_code=500,
+            detail="Could not delete document record.",
+        )
+
+    return {
+        "message": "Document deleted successfully.",
+        "document_id": document_id,
     }
 
 
