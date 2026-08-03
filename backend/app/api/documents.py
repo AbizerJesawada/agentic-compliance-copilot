@@ -1082,8 +1082,8 @@ def compare_two_documents(request: CompareRequest):
 
     try:
         conflicts = compare_documents(
-            document_a_text=document_a_text,
-            document_b_text=document_b_text,
+            document_a=document_a_text,
+            document_b=document_b_text,
             document_a_name=document_a["original_filename"],
             document_b_name=document_b["original_filename"],
         )
@@ -1115,7 +1115,7 @@ def compare_two_documents(request: CompareRequest):
 def analyze_gaps(request: GapAnalysisRequest):
     try:
         gap_analysis = analyze_contract_gaps(
-            contract_text=request.contract_text,
+            contract=request.contract_text,
             checklist=request.checklist,
         )
     except Exception as error:

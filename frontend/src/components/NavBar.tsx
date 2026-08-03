@@ -37,8 +37,11 @@ export function NavBar() {
     { href: "/dashboard", label: "Dashboard" },
     { href: "/upload", label: "Upload" },
     { href: "/documents", label: "Documents" },
+    { href: "/compare", label: "Compare" },
+    { href: "/gap-analysis", label: "Gap Analysis" },
     { href: "/controls", label: "Controls" },
     { href: "/evaluation", label: "Evaluation" },
+    { href: "/audit", label: "Audit" },
   ];
 
   return (

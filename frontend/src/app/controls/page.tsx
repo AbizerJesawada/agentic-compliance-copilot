@@ -35,6 +35,7 @@ export default function ControlsPage() {
   const [reviewingId, setReviewingId] = useState("");
   const [filter, setFilter] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const { toasts, pushToast, dismissToast } = useToasts();
 
   async function loadControls() {
@@ -68,7 +69,11 @@ export default function ControlsPage() {
     void loadControls();
   }, [filter, searchQuery]);
 
-  async function reviewControl(controlId: string, decision: string) {
+  async function reviewControl(
+    controlId: string,
+    decision: string,
+    note?: string
+  ) {
     setReviewingId(controlId);
 
     try {
@@ -81,6 +86,7 @@ export default function ControlsPage() {
             control_id: controlId,
             decision,
             reviewer: "frontend-user",
+            review_note: note?.trim() || null,
           }),
         }
       );
@@ -227,29 +233,55 @@ export default function ControlsPage() {
               </div>
 
               {control.status === "pending_review" && (
-                <div className="mt-4 flex gap-2 border-t border-zinc-800 pt-4">
-                  <button
-                    type="button"
-                    disabled={reviewingId === control.id}
-                    onClick={() => void reviewControl(control.id, "approved")}
-                    className="flex h-9 items-center gap-2 rounded-md bg-teal-400 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-teal-300 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {reviewingId === control.id ? (
-                      <LoaderCircle className="animate-spin" size={15} />
-                    ) : (
-                      <CheckCircle2 size={15} />
-                    )}
-                    Approve
-                  </button>
-                  <button
-                    type="button"
-                    disabled={reviewingId === control.id}
-                    onClick={() => void reviewControl(control.id, "rejected")}
-                    className="flex h-9 items-center gap-2 rounded-md border border-rose-700 px-4 text-sm text-rose-300 transition hover:bg-rose-950 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <XCircle size={15} />
-                    Reject
-                  </button>
+                <div className="mt-4 border-t border-zinc-800 pt-4">
+                  <textarea
+                    value={reviewNotes[control.id] ?? ""}
+                    onChange={(e) =>
+                      setReviewNotes((current) => ({
+                        ...current,
+                        [control.id]: e.target.value,
+                      }))
+                    }
+                    rows={2}
+                    placeholder="Add a review note (optional)..."
+                    className="w-full resize-y rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs text-zinc-100 outline-none transition focus:border-teal-500"
+                  />
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      disabled={reviewingId === control.id}
+                      onClick={() =>
+                        void reviewControl(
+                          control.id,
+                          "approved",
+                          reviewNotes[control.id]
+                        )
+                      }
+                      className="flex h-9 items-center gap-2 rounded-md bg-teal-400 px-4 text-sm font-semibold text-zinc-950 transition hover:bg-teal-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {reviewingId === control.id ? (
+                        <LoaderCircle className="animate-spin" size={15} />
+                      ) : (
+                        <CheckCircle2 size={15} />
+                      )}
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      disabled={reviewingId === control.id}
+                      onClick={() =>
+                        void reviewControl(
+                          control.id,
+                          "rejected",
+                          reviewNotes[control.id]
+                        )
+                      }
+                      className="flex h-9 items-center gap-2 rounded-md border border-rose-700 px-4 text-sm text-rose-300 transition hover:bg-rose-950 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <XCircle size={15} />
+                      Reject
+                    </button>
+                  </div>
                 </div>
               )}
 
