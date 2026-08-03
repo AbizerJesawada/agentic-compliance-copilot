@@ -7,7 +7,11 @@ import {
   LoaderCircle,
   AlertCircle,
   RefreshCw,
+  ArrowDownToLine,
+  Search,
 } from "lucide-react";
+import { ToastContainer, useToasts } from "@/components/Toast";
+import { exportControlsUrl } from "@/lib/api";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
 
@@ -30,15 +34,22 @@ export default function ControlsPage() {
   const [error, setError] = useState("");
   const [reviewingId, setReviewingId] = useState("");
   const [filter, setFilter] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const { toasts, pushToast, dismissToast } = useToasts();
 
   async function loadControls() {
     setIsLoading(true);
     setError("");
 
     try {
-      const url = filter
-        ? `${API_BASE_URL}/documents/controls/review?status=${filter}`
-        : `${API_BASE_URL}/documents/controls/review`;
+      const params = new URLSearchParams();
+      if (filter) params.set("status", filter);
+      if (searchQuery.trim()) params.set("search", searchQuery.trim());
+
+      const query = params.toString();
+      const url = `${API_BASE_URL}/documents/controls/review${
+        query ? `?${query}` : ""
+      }`;
 
       const response = await fetch(url);
 
@@ -55,7 +66,7 @@ export default function ControlsPage() {
 
   useEffect(() => {
     void loadControls();
-  }, [filter]);
+  }, [filter, searchQuery]);
 
   async function reviewControl(controlId: string, decision: string) {
     setReviewingId(controlId);
@@ -76,9 +87,17 @@ export default function ControlsPage() {
 
       if (!response.ok) throw new Error("Review failed.");
 
+      pushToast(
+        decision === "approved"
+          ? "Control approved."
+          : "Control rejected."
+      );
       await loadControls();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Review failed.");
+      pushToast(
+        err instanceof Error ? err.message : "Review failed.",
+        "error"
+      );
     } finally {
       setReviewingId("");
     }
@@ -86,6 +105,8 @@ export default function ControlsPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Control Review</h1>
@@ -93,31 +114,55 @@ export default function ControlsPage() {
             Review AI-discovered compliance controls.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void loadControls()}
-          className="flex h-9 items-center gap-2 rounded-md border border-zinc-700 px-3 text-sm text-zinc-300 transition hover:bg-zinc-800"
-        >
-          <RefreshCw size={15} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <a
+            href={exportControlsUrl(filter ?? undefined)}
+            className="flex h-9 items-center gap-2 rounded-md border border-zinc-700 px-3 text-sm text-zinc-300 transition hover:bg-zinc-800"
+          >
+            <ArrowDownToLine size={15} /> Export CSV
+          </a>
+          <button
+            type="button"
+            onClick={() => void loadControls()}
+            className="flex h-9 items-center gap-2 rounded-md border border-zinc-700 px-3 text-sm text-zinc-300 transition hover:bg-zinc-800"
+          >
+            <RefreshCw size={15} />
+            Refresh
+          </button>
+        </div>
       </div>
 
-      <div className="mt-6 flex gap-2">
-        {[null, "pending_review", "approved", "rejected"].map((status) => (
-          <button
-            key={status ?? "all"}
-            type="button"
-            onClick={() => setFilter(status)}
-            className={`rounded-md px-3 py-1.5 text-xs transition ${
-              filter === status
-                ? "bg-teal-400 text-zinc-950"
-                : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
-            }`}
-          >
-            {status ? status.replace("_", " ") : "All"}
-          </button>
-        ))}
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex gap-2">
+          {[null, "pending_review", "approved", "rejected"].map((status) => (
+            <button
+              key={status ?? "all"}
+              type="button"
+              onClick={() => setFilter(status)}
+              className={`rounded-md px-3 py-1.5 text-xs transition ${
+                filter === status
+                  ? "bg-teal-400 text-zinc-950"
+                  : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+              }`}
+            >
+              {status ? status.replace("_", " ") : "All"}
+            </button>
+          ))}
+        </div>
+
+        <div className="relative flex-1">
+          <Search
+            size={15}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
+          />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search controls..."
+            className="w-full rounded-md border border-zinc-700 bg-zinc-900 py-2 pl-9 pr-3 text-sm text-zinc-100 outline-none transition focus:border-teal-500"
+          />
+        </div>
       </div>
 
       {isLoading && (
@@ -205,6 +250,17 @@ export default function ControlsPage() {
                     <XCircle size={15} />
                     Reject
                   </button>
+                </div>
+              )}
+
+              {control.status !== "pending_review" && control.reviewer && (
+                <div className="mt-4 border-t border-zinc-800 pt-3 text-xs text-zinc-500">
+                  <span className="text-zinc-400">
+                    Reviewed by {control.reviewer}
+                  </span>
+                  {control.review_note && (
+                    <p className="mt-1">Note: {control.review_note}</p>
+                  )}
                 </div>
               )}
             </div>

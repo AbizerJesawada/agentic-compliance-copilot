@@ -162,6 +162,131 @@ def chunk_text_by_paragraphs(
 
     return chunks
 
+def chunk_text_by_sections(
+    text: str,
+    chunk_size: int = 1000,
+) -> list[str]:
+    cleaned_text = text.strip()
+
+    if not cleaned_text:
+        return []
+
+    section_patterns = [
+        r"(?m)^\d+[.)]\s+.+$",
+        r"(?m)^[A-Za-z]\.\s+.+$",
+        r"(?m)^[A-Z][A-Z0-9 ]{2,60}$",
+    ]
+
+    matches = []
+    first_match_pos = None
+
+    for pattern in section_patterns:
+        for match in re.finditer(pattern, cleaned_text):
+            matches.append((match.start(), match.group()))
+            if first_match_pos is None or match.start() < first_match_pos:
+                first_match_pos = match.start()
+
+    if first_match_pos is None:
+        return chunk_text_by_paragraphs(text=text, chunk_size=chunk_size)
+
+    sections = []
+    matched_positions = sorted(set(pos for pos, _ in matches))
+
+    for index, position in enumerate(matched_positions):
+        start = position
+        end = (
+            matched_positions[index + 1]
+            if index + 1 < len(matched_positions)
+            else len(cleaned_text)
+        )
+        section_text = cleaned_text[start:end].strip()
+
+        if section_text:
+            sections.append(section_text)
+
+    return sections
+
+
+def chunk_text_recursive(
+    text: str,
+    chunk_size: int = 1000,
+    chunk_overlap: int = 200,
+) -> list[str]:
+    cleaned_text = text.strip()
+
+    if not cleaned_text:
+        return []
+
+    separators = ["\n\n", "\n", ". ", "! ", "? ", "; ", " "]
+
+    return _recursive_split(
+        text=cleaned_text,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        separators=separators,
+    )
+
+
+def _recursive_split(
+    text: str,
+    chunk_size: int,
+    chunk_overlap: int,
+    separators: list[str],
+) -> list[str]:
+    if len(text) <= chunk_size:
+        return [text] if text.strip() else []
+
+    if not separators:
+        return chunk_text(
+            text=text,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+        )
+
+    separator = separators[0]
+    remaining_separators = separators[1:]
+    parts = re.split(f"({re.escape(separator)})", text)
+
+    if len(parts) <= 1:
+        return _recursive_split(
+            text=text,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            separators=remaining_separators,
+        )
+
+    chunks = []
+    current_chunk = ""
+
+    for part in parts:
+        candidate = f"{current_chunk}{part}"
+
+        if len(candidate) <= chunk_size:
+            current_chunk = candidate
+            continue
+
+        if current_chunk:
+            chunks.append(current_chunk.strip())
+
+        if len(part) <= chunk_size:
+            current_chunk = part
+        else:
+            current_chunk = ""
+            chunks.extend(
+                _recursive_split(
+                    text=part,
+                    chunk_size=chunk_size,
+                    chunk_overlap=chunk_overlap,
+                    separators=remaining_separators,
+                )
+            )
+
+    if current_chunk:
+        chunks.append(current_chunk.strip())
+
+    return chunks
+
+
 def chunk_csv_rows(text: str) -> list[str]:
     cleaned_text = text.strip()
 

@@ -23,6 +23,10 @@ backend/review_queue/
 backend/evaluation_reports/
 backend/conversation_data/
 backend/feedback_data/
+backend/audit_data/
+backend/document_registry/
+backend/risk_reports/
+backend/users.json
 # OS / editor
 .DS_Store
 .vscode/

@@ -73,17 +73,30 @@ def save_pending_controls(
     return added_controls
 
 
-def list_controls(status: str | None = None) -> list[dict]:
+def list_controls(
+    status: str | None = None,
+    search: str | None = None,
+) -> list[dict]:
     controls = load_controls()
 
-    if status is None:
-        return controls
+    if status is not None:
+        controls = [
+            control
+            for control in controls
+            if control.get("status") == status
+        ]
 
-    return [
-        control
-        for control in controls
-        if control.get("status") == status
-    ]
+    if search:
+        normalized_search = search.lower().strip()
+        controls = [
+            control
+            for control in controls
+            if normalized_search in (control.get("control_name") or "").lower()
+            or normalized_search in (control.get("evidence") or "").lower()
+            or normalized_search in (control.get("recommendation") or "").lower()
+        ]
+
+    return controls
 
 
 def review_control(

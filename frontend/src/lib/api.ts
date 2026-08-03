@@ -65,3 +65,69 @@ export async function reviewControl(controlId: string, decision: string) {
 export async function getEvaluationReports() {
   return request<{ reports: any[] }>("/documents/evaluation-reports");
 }
+
+export async function login(username: string, password: string) {
+  return request<{ token: string; user: { username: string; role: string } }>(
+    "/documents/auth/login",
+    {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    }
+  );
+}
+
+export async function getDashboardStats() {
+  return request<{
+    document_count: number;
+    indexed_document_count: number;
+    total_character_count: number;
+    control_count: number;
+    pending_control_count: number;
+    approved_control_count: number;
+    rejected_control_count: number;
+    audit_entry_count: number;
+    evaluation_report_count: number;
+  }>("/documents/stats/dashboard");
+}
+
+export async function getDocumentContent(documentId: string, previewChars = 0) {
+  const suffix = previewChars ? `?preview_chars=${previewChars}` : "";
+  return request<{ content: string; original_filename: string }>(
+    `/documents/${documentId}/content${suffix}`
+  );
+}
+
+export async function getAuditLog(limit = 100) {
+  return request<{ entries: any[] }>(`/documents/audit-log?limit=${limit}`);
+}
+
+export async function compareDocuments(documentAId: string, documentBId: string) {
+  return request<{ conflicts: any[]; document_a: string; document_b: string }>(
+    "/documents/compare",
+    {
+      method: "POST",
+      body: JSON.stringify({ document_a_id: documentAId, document_b_id: documentBId }),
+    }
+  );
+}
+
+export async function runGapAnalysis(contractText: string, checklist: string) {
+  return request<{
+    total_requirements: number;
+    present_count: number;
+    missing_count: number;
+    results: any[];
+  }>("/documents/gap-analysis", {
+    method: "POST",
+    body: JSON.stringify({ contract_text: contractText, checklist }),
+  });
+}
+
+export function exportControlsUrl(status?: string) {
+  const query = status ? `?status=${status}` : "";
+  return `${API_BASE_URL}/documents/export/controls${query}`;
+}
+
+export function exportRiskReportUrl(format: "csv" | "pdf") {
+  return `${API_BASE_URL}/documents/export/risk-report?format=${format}`;
+}

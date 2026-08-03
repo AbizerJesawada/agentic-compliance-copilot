@@ -1,8 +1,10 @@
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 from time import perf_counter
 from app.services.control_discovery import discover_additional_controls
@@ -20,6 +22,8 @@ from app.services.text_chunker import (
     chunk_csv_rows,
     chunk_text,
     chunk_text_by_paragraphs,
+    chunk_text_by_sections,
+    chunk_text_recursive,
 )
 from app.services.vector_store import index_chunks_file, search_similar_chunks
 from app.services.hybrid_retriever import hybrid_search
@@ -51,6 +55,20 @@ from app.services.user_feedback import save_answer_feedback
 from app.services.user_feedback import (
     list_answer_feedback,
     save_answer_feedback,
+)
+from app.services.document_compare import compare_documents
+from app.services.gap_analysis import analyze_contract_gaps
+from app.services.ocr_utils import extract_text_with_ocr
+from app.services.report_export import (
+    controls_to_csv,
+    risk_report_to_csv,
+    risk_report_to_pdf,
+)
+from app.services.audit_trail import list_audit_entries, log_action
+from app.services.auth import (
+    authenticate_user,
+    create_token,
+    verify_token,
 )
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
@@ -98,6 +116,18 @@ class ControlReviewRequest(BaseModel):
     decision: str
     reviewer: str
     review_note: str | None = None
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class CompareRequest(BaseModel):
+    document_a_id: str
+    document_b_id: str
+
+class GapAnalysisRequest(BaseModel):
+    contract_text: str
+    checklist: str
 
 class AssistantQueryRequest(BaseModel):
     query: str
@@ -167,6 +197,13 @@ async def upload_document(file: UploadFile = File(...)):
 
     try:
         extracted_text = extract_text_from_file(file_path)
+
+        if file_extension == ".pdf" and len(extracted_text.strip()) < 100:
+            ocr_text = extract_text_with_ocr(file_path)
+
+            if ocr_text.strip():
+                extracted_text = ocr_text
+
     except Exception as error:
         raise HTTPException(
             status_code=422,
@@ -196,6 +233,10 @@ async def upload_document(file: UploadFile = File(...)):
             chunks = chunk_text_by_paragraphs(text=extracted_text)
         elif chunking_method == "csv_rows":
             chunks = chunk_csv_rows(text=extracted_text)
+        elif chunking_method == "sections":
+            chunks = chunk_text_by_sections(text=extracted_text)
+        elif chunking_method == "recursive":
+            chunks = chunk_text_recursive(text=extracted_text)
         else:
             chunks = chunk_text(text=extracted_text)
 
@@ -248,6 +289,17 @@ async def upload_document(file: UploadFile = File(...)):
         character_count=len(extracted_text),
     )
 
+    log_action(
+        action="document.uploaded",
+        username="frontend-user",
+        details={
+            "filename": file.filename,
+            "chunking_method": chunking_method,
+            "chunk_count": len(chunks),
+            "indexed": bool(index_result),
+        },
+    )
+
     return {
         "message": "Document uploaded, chunked, and indexed successfully",
         "original_filename": file.filename,
@@ -266,6 +318,7 @@ async def upload_document(file: UploadFile = File(...)):
         "index_result": index_result,
         "index_error": index_error,
         "document_id": document_record["id"],
+        "version": document_record.get("version", 1),
     }
 
 
@@ -314,6 +367,14 @@ def delete_uploaded_document(document_id: str):
             status_code=500,
             detail="Could not delete document record.",
         )
+
+    log_action(
+        action="document.deleted",
+        username="frontend-user",
+        details={
+            "filename": document.get("original_filename"),
+        },
+    )
 
     return {
         "message": "Document deleted successfully.",
@@ -560,10 +621,14 @@ def analyze_document_risk(request: RiskAnalysisRequest):
             detail="Risk analysis query cannot be empty.",
         )
 
-    return run_risk_graph(
+    result = run_risk_graph(
         query=request.query,
         top_k=request.top_k,
     )
+
+    save_risk_report(result)
+
+    return result
 
 
 @router.post("/discover-controls")
@@ -802,9 +867,12 @@ def get_conversation_session(session_id: str):
 }
 
 @router.get("/controls/review")
-def get_controls_for_review(status: str | None = None):
+def get_controls_for_review(
+    status: str | None = None,
+    search: str | None = None,
+):
     return {
-        "controls": list_controls(status=status),
+        "controls": list_controls(status=status, search=search),
     }
 
 
@@ -824,6 +892,15 @@ def review_discovered_control(request: ControlReviewRequest):
             status_code=400,
             detail=str(error),
         )
+
+    log_action(
+        action=f"control.{request.decision}",
+        username=request.reviewer,
+        details={
+            "control_id": request.control_id,
+            "control_name": reviewed_control.get("control_name"),
+        },
+    )
 
     return {
         "message": "Control reviewed successfully.",
@@ -916,3 +993,285 @@ def get_evaluation_reports(limit: int = 10):
     return {
         "reports": list_evaluation_reports(limit=limit),
     }
+
+
+@router.post("/auth/login")
+def login(request: LoginRequest):
+    user = authenticate_user(
+        username=request.username,
+        password=request.password,
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid username or password.",
+        )
+
+    token = create_token(
+        username=user["username"],
+        role=user["role"],
+    )
+
+    log_action(
+        action="auth.login",
+        username=request.username,
+    )
+
+    return {
+        "token": token,
+        "user": {
+            "username": user["username"],
+            "role": user["role"],
+        },
+    }
+
+
+@router.get("/{document_id}/content")
+def get_document_content(document_id: str, preview_chars: int = 0):
+    document = get_document(document_id)
+
+    if not document:
+        raise HTTPException(
+            status_code=404,
+            detail="Document was not found.",
+        )
+
+    extracted_text_path = document.get("extracted_text_path")
+
+    if not extracted_text_path or not Path(extracted_text_path).exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Extracted text file was not found for this document.",
+        )
+
+    extracted_text = Path(extracted_text_path).read_text(
+        encoding="utf-8",
+    )
+
+    return {
+        "document_id": document_id,
+        "original_filename": document["original_filename"],
+        "character_count": len(extracted_text),
+        "content": extracted_text[:preview_chars] if preview_chars else extracted_text,
+    }
+
+
+@router.post("/compare")
+def compare_two_documents(request: CompareRequest):
+    document_a = get_document(request.document_a_id)
+    document_b = get_document(request.document_b_id)
+
+    if not document_a or not document_b:
+        raise HTTPException(
+            status_code=404,
+            detail="One or both documents were not found.",
+        )
+
+    document_a_path = document_a.get("extracted_text_path")
+    document_b_path = document_b.get("extracted_text_path")
+
+    if not document_a_path or not document_b_path:
+        raise HTTPException(
+            status_code=404,
+            detail="Extracted text files were not found.",
+        )
+
+    document_a_text = Path(document_a_path).read_text(encoding="utf-8")
+    document_b_text = Path(document_b_path).read_text(encoding="utf-8")
+
+    try:
+        conflicts = compare_documents(
+            document_a_text=document_a_text,
+            document_b_text=document_b_text,
+            document_a_name=document_a["original_filename"],
+            document_b_name=document_b["original_filename"],
+        )
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Document comparison failed: {str(error)}",
+        )
+
+    log_action(
+        action="document.compare",
+        username="frontend-user",
+        details={
+            "document_a": document_a["original_filename"],
+            "document_b": document_b["original_filename"],
+            "conflict_count": len(conflicts),
+        },
+    )
+
+    return {
+        "document_a": document_a["original_filename"],
+        "document_b": document_b["original_filename"],
+        "conflict_count": len(conflicts),
+        "conflicts": conflicts,
+    }
+
+
+@router.post("/gap-analysis")
+def analyze_gaps(request: GapAnalysisRequest):
+    try:
+        gap_analysis = analyze_contract_gaps(
+            contract_text=request.contract_text,
+            checklist=request.checklist,
+        )
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Gap analysis failed: {str(error)}",
+        )
+
+    return gap_analysis
+
+
+@router.get("/export/risk-report")
+def export_risk_report(format: str = "csv"):
+    try:
+        analyzed_risks = load_analyzed_risks()
+
+        if format == "pdf":
+            content, media_type = risk_report_to_pdf(analyzed_risks)
+
+        else:
+            content, media_type = risk_report_to_csv(analyzed_risks)
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Export failed: {str(error)}",
+        )
+
+    content_disposition = f"attachment; filename=risk-report.{format}"
+
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": content_disposition},
+    )
+
+
+@router.get("/export/controls")
+def export_controls(format: str = "csv", status: str | None = None):
+    controls = list_controls(status=status)
+
+    try:
+        content, media_type = controls_to_csv(controls)
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Export failed: {str(error)}",
+        )
+
+    content_disposition = "attachment; filename=controls.csv"
+
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": content_disposition},
+    )
+
+
+@router.get("/audit-log")
+def get_audit_log(limit: int = 100):
+    if limit < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Limit must be at least 1.",
+        )
+
+    return {
+        "entries": list_audit_entries(limit=limit),
+    }
+
+
+@router.get("/stats/dashboard")
+def get_dashboard_stats():
+    documents = list_documents()
+    controls = list_controls()
+    audit_entries = list_audit_entries(limit=1000)
+
+    indexed_documents = [
+        document
+        for document in documents
+        if document.get("status") == "indexed"
+    ]
+
+    pending_controls = [
+        control
+        for control in controls
+        if control.get("status") == "pending"
+    ]
+
+    approved_controls = [
+        control
+        for control in controls
+        if control.get("status") == "approved"
+    ]
+
+    rejected_controls = [
+        control
+        for control in controls
+        if control.get("status") == "rejected"
+    ]
+
+    total_character_count = sum(
+        document.get("character_count", 0)
+        for document in documents
+    )
+
+    return {
+        "document_count": len(documents),
+        "indexed_document_count": len(indexed_documents),
+        "total_character_count": total_character_count,
+        "control_count": len(controls),
+        "pending_control_count": len(pending_controls),
+        "approved_control_count": len(approved_controls),
+        "rejected_control_count": len(rejected_controls),
+        "audit_entry_count": len(audit_entries),
+        "evaluation_report_count": len(list_evaluation_reports(limit=1000)),
+    }
+
+
+def load_analyzed_risks() -> list[dict]:
+    risk_dir = Path("risk_reports")
+
+    if not risk_dir.exists():
+        return []
+
+    risk_files = sorted(risk_dir.glob("*.json"))
+
+    risks = []
+
+    for risk_file in risk_files:
+        try:
+            risk_report = json.loads(risk_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        risks.append(risk_report)
+
+    return risks
+
+
+def save_risk_report(result: dict) -> Path:
+    risk_dir = Path("risk_reports")
+    risk_dir.mkdir(exist_ok=True)
+
+    report = {
+        **result,
+        "analyzed_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    report_filename = f"risk_report_{uuid4().hex}.json"
+    report_path = risk_dir / report_filename
+
+    report_path.write_text(
+        json.dumps(report, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    return report_path

@@ -35,6 +35,9 @@ def register_document(
 ) -> dict:
     documents = load_registry()
 
+    previous_version = get_previous_version(documents, original_filename)
+    version = (previous_version or {}).get("version", 0) + 1
+
     document = {
         "id": str(uuid4()),
         "original_filename": original_filename,
@@ -45,13 +48,37 @@ def register_document(
         "size_bytes": size_bytes,
         "character_count": character_count,
         "status": "indexed" if chunks_path else "uploaded",
+        "version": version,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
+
+    if version > 1:
+        previous_version["superseded_by"] = document["id"]
+        previous_version["status"] = "superseded"
 
     documents.append(document)
     save_registry(documents)
 
     return document
+
+
+def get_previous_version(
+    documents: list[dict],
+    original_filename: str,
+) -> dict | None:
+    matching_documents = [
+        document
+        for document in documents
+        if document.get("original_filename") == original_filename
+    ]
+
+    if not matching_documents:
+        return None
+
+    return max(
+        matching_documents,
+        key=lambda document: document.get("version", 0),
+    )
 
 
 def list_documents() -> list[dict]:
