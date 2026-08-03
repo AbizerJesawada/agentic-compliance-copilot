@@ -1,12 +1,15 @@
 import hashlib
 import hmac
 import json
+import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 USERS_FILE = Path("users.json")
-TOKEN_SECRET = "compliance-copilot-secret"
+# A local fallback keeps the demo easy to run. Set TOKEN_SECRET in .env when
+# sharing the app with other people.
+TOKEN_SECRET = os.getenv("TOKEN_SECRET", "local-compliance-copilot-secret")
 TOKEN_TTL_HOURS = 24
 
 DEFAULT_USERS = [

@@ -18,6 +18,8 @@ backend/extracted_text/
 backend/chunks/
 backend/chroma_db/
 backend/.env
+backend/app/.env
+frontend/.env.local
 .env
 backend/review_queue/
 backend/evaluation_reports/

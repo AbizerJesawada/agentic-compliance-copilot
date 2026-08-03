@@ -5,6 +5,8 @@ def has_extraction_quality_issue(extracted_text: str) -> bool:
         return True
 
     suspicious_markers = [
+        "\ufffd",
+        "\u0142",
         "�",
         "ł",
         "qSt",

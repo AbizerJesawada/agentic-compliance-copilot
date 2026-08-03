@@ -5,8 +5,7 @@ import ChatSidebar from "@/components/ChatSidebar";
 import ChatMessages from "@/components/ChatMessages";
 import ChatInput from "@/components/ChatInput";
 import DetailsPanel from "@/components/DetailsPanel";
-
-const API_BASE_URL = "http://127.0.0.1:8000";
+import { API_BASE_URL } from "@/lib/api";
 
 type Source = {
   chunk_id: string;

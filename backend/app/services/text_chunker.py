@@ -19,11 +19,14 @@ def chunk_text(
     start = 0
 
     while start < len(cleaned_text):
-        end = start + chunk_size
+        end = min(start + chunk_size, len(cleaned_text))
         chunk = cleaned_text[start:end].strip()
 
         if chunk:
             chunks.append(chunk)
+
+        if end >= len(cleaned_text):
+            break
 
         start += chunk_size - chunk_overlap
 

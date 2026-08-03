@@ -63,9 +63,23 @@ Sources, Confidence, Evaluation, and Human Review
 Open a terminal inside the `backend` folder.
 
 ```powershell
+./setup_local.ps1
 .\.venv\Scripts\Activate.ps1
 python -m uvicorn app.main:app --reload --reload-dir app
 ```
+
+If the virtual environment already exists, start from the activation command. The setup script requires Python 3.11 to be installed first.
+
+## Run the Frontend
+
+Open a second terminal inside the `frontend` folder.
+
+```powershell
+npm install
+npm run dev
+```
+
+The frontend reads `NEXT_PUBLIC_API_BASE_URL` from `frontend/.env.local`. When it is not set, it uses `http://127.0.0.1:8000` for local development.
 
 Open Swagger API documentation:
 
@@ -76,11 +90,11 @@ http://127.0.0.1:8000/docs
 ## Document Processing Workflow
 
 1. Upload a document with `POST /documents/upload`
-2. Copy `extracted_text_path` from the response
-3. Create chunks with `POST /documents/chunk`
-4. Index chunks with `POST /documents/index`
-5. Search with `POST /documents/search-hybrid`
-6. Ask grounded questions with `POST /documents/ask`
+2. The backend extracts text, selects a chunking strategy, creates chunks, and indexes them automatically.
+3. Review the upload response for the text preview, selected strategy, extraction warning, and indexing result.
+4. Search with `POST /documents/search-hybrid` or ask a grounded question with `POST /documents/assistant/query`.
+
+The `POST /documents/chunk` and `POST /documents/index` endpoints remain available when you want to test a chunking method manually.
 
 For automatic chunking:
 
@@ -158,17 +172,17 @@ GET /documents/evaluation-reports
 
 - Scanned PDFs need OCR for accurate text extraction.
 - Local files and ChromaDB are used during development.
-- Authentication, database persistence, and cloud deployment will be added later.
+- Login and role information are intended for local demonstration; this is not a production authentication system.
+- Conversation, review, audit, and evaluation data are stored locally as JSON files.
+- The application has not been deployed.
 
 ## Future Improvements
 
-- LlamaIndex ingestion pipeline
-- MCP server and MCP tools
-- Document comparison and policy conflict detection
-- Contract gap analysis
-- User authentication and role-based access
-- Frontend compliance dashboard
-- PostgreSQL persistence, Docker, tests, and CI/CD
+- Persistent database storage such as PostgreSQL
+- Automated backend and frontend test coverage
+- CI checks for formatting, tests, and builds
+- Production-grade authentication, authorization, and secret management
+- Cloud deployment with managed object and vector storage
 
 ## LlamaIndex Retrieval
 

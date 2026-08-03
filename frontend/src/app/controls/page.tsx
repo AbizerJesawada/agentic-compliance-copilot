@@ -11,9 +11,11 @@ import {
   Search,
 } from "lucide-react";
 import { ToastContainer, useToasts } from "@/components/Toast";
-import { exportControlsUrl } from "@/lib/api";
-
-const API_BASE_URL = "http://127.0.0.1:8000";
+import {
+  exportControlsUrl,
+  getPendingControls,
+  reviewControl as submitControlReview,
+} from "@/lib/api";
 
 type Control = {
   id: string;
@@ -43,20 +45,10 @@ export default function ControlsPage() {
     setError("");
 
     try {
-      const params = new URLSearchParams();
-      if (filter) params.set("status", filter);
-      if (searchQuery.trim()) params.set("search", searchQuery.trim());
-
-      const query = params.toString();
-      const url = `${API_BASE_URL}/documents/controls/review${
-        query ? `?${query}` : ""
-      }`;
-
-      const response = await fetch(url);
-
-      if (!response.ok) throw new Error("Could not load controls.");
-
-      const data: { controls: Control[] } = await response.json();
+      const data = await getPendingControls(
+        filter ?? undefined,
+        searchQuery.trim() || undefined,
+      );
       setControls(data.controls);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load controls.");
@@ -77,21 +69,7 @@ export default function ControlsPage() {
     setReviewingId(controlId);
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/documents/controls/review`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            control_id: controlId,
-            decision,
-            reviewer: "frontend-user",
-            review_note: note?.trim() || null,
-          }),
-        }
-      );
-
-      if (!response.ok) throw new Error("Review failed.");
+      await submitControlReview(controlId, decision, note);
 
       pushToast(
         decision === "approved"

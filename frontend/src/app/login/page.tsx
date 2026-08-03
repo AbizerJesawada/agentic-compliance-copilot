@@ -92,7 +92,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none transition focus:border-teal-500"
-              placeholder="••••••••"
+              placeholder="Enter your password"
             />
           </div>
 
@@ -113,7 +113,7 @@ export default function LoginPage() {
           </button>
 
           <p className="text-center text-xs text-zinc-500">
-            Demo accounts: admin / admin123 · reviewer / review123 ·
+            Demo accounts: admin / admin123 | reviewer / review123 |
             analyst / analyst123
           </p>
         </form>

@@ -1,4 +1,28 @@
-const API_BASE_URL = "http://127.0.0.1:8000";
+export const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
+
+type StoredUser = {
+  username: string;
+  role: string;
+};
+
+export function getStoredUser(): StoredUser | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const storedUser = window.localStorage.getItem("cc_user");
+
+  if (!storedUser) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(storedUser) as StoredUser;
+  } catch {
+    return null;
+  }
+}
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -50,15 +74,38 @@ export async function getConversationMessages(sessionId: string) {
   );
 }
 
-export async function getPendingControls(status?: string) {
-  const query = status ? `?status=${status}` : "";
-  return request<{ controls: any[] }>(`/documents/controls/review${query}`);
+export async function getPendingControls(status?: string, search?: string) {
+  const parameters = new URLSearchParams();
+
+  if (status) {
+    parameters.set("status", status);
+  }
+
+  if (search) {
+    parameters.set("search", search);
+  }
+
+  const query = parameters.toString();
+  const suffix = query ? `?${query}` : "";
+
+  return request<{ controls: any[] }>(`/documents/controls/review${suffix}`);
 }
 
-export async function reviewControl(controlId: string, decision: string) {
+export async function reviewControl(
+  controlId: string,
+  decision: string,
+  reviewNote?: string,
+) {
+  const reviewer = getStoredUser()?.username ?? "local-user";
+
   return request<any>("/documents/controls/review", {
     method: "POST",
-    body: JSON.stringify({ control_id: controlId, decision, reviewer: "frontend-user" }),
+    body: JSON.stringify({
+      control_id: controlId,
+      decision,
+      reviewer,
+      review_note: reviewNote?.trim() || null,
+    }),
   });
 }
 
