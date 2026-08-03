@@ -98,7 +98,7 @@ export default function DashboardPage() {
       icon: GitBranch,
       color: "text-violet-300",
       bg: "bg-violet-950/50",
-      href: "/dashboard",
+      href: "/audit",
     },
   ];
 

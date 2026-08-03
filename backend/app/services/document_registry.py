@@ -106,6 +106,11 @@ def delete_document(document_id: str) -> bool:
     if len(updated_documents) == len(documents):
         return False
 
+    for document in updated_documents:
+        if document.get("superseded_by") == document_id:
+            document["superseded_by"] = None
+            document["status"] = "indexed"
+
     save_registry(updated_documents)
 
     return True

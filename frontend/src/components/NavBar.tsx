@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, LogOut } from "lucide-react";
 
 type StoredUser = {
@@ -12,6 +12,7 @@ type StoredUser = {
 
 export function NavBar() {
   const router = useRouter();
+  const pathname = usePathname();
   const [user, setUser] = useState<StoredUser>(null);
 
   useEffect(() => {
@@ -19,11 +20,13 @@ export function NavBar() {
     if (storedUser) {
       try {
         setUser(JSON.parse(storedUser));
+        return;
       } catch {
         localStorage.removeItem("cc_user");
       }
     }
-  }, []);
+    setUser(null);
+  }, [pathname]);
 
   function handleLogout() {
     localStorage.removeItem("cc_token");

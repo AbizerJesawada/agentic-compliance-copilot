@@ -4,7 +4,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import Response
 from pydantic import BaseModel
 from time import perf_counter
 from app.services.control_discovery import discover_additional_controls
@@ -51,7 +51,6 @@ from app.services.conversation_memory import (
     load_conversation,
     save_conversation_message,
 )
-from app.services.user_feedback import save_answer_feedback
 from app.services.user_feedback import (
     list_answer_feedback,
     save_answer_feedback,
@@ -68,7 +67,6 @@ from app.services.audit_trail import list_audit_entries, log_action
 from app.services.auth import (
     authenticate_user,
     create_token,
-    verify_token,
 )
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
@@ -128,10 +126,6 @@ class CompareRequest(BaseModel):
 class GapAnalysisRequest(BaseModel):
     contract_text: str
     checklist: str
-
-class AssistantQueryRequest(BaseModel):
-    query: str
-    top_k: int = 5
 
 class AssistantQueryRequest(BaseModel):
     query: str
@@ -431,10 +425,24 @@ def chunk_document(request: ChunkRequest):
         elif selected_chunking_method == "csv_rows":
             chunks = chunk_csv_rows(text=text)
 
+        elif selected_chunking_method == "sections":
+            chunks = chunk_text_by_sections(
+                text=text,
+                chunk_size=request.chunk_size,
+            )
+
+        elif selected_chunking_method == "recursive":
+            chunks = chunk_text_recursive(
+                text=text,
+                chunk_size=request.chunk_size,
+                chunk_overlap=request.chunk_overlap,
+            )
+
         else:
             raise ValueError(
                 "Unsupported chunking method. "
-                "Use 'auto', 'fixed', 'paragraph', or 'csv_rows'."
+                "Use 'auto', 'fixed', 'paragraph', 'csv_rows', "
+                "'sections', or 'recursive'."
             )
 
     except ValueError as error:
@@ -736,9 +744,8 @@ def assistant_query(request: AssistantQueryRequest):
             top_k=request.top_k,
         )
         result["query"] = request.query
-        assistant_message = result.get(
-            "risk_summary",
-            "Compliance risk analysis completed.",
+        assistant_message = result.get("risk_summary") or (
+            "Compliance risk analysis completed."
         )
 
     else:
@@ -1203,7 +1210,7 @@ def get_dashboard_stats():
     pending_controls = [
         control
         for control in controls
-        if control.get("status") == "pending"
+        if control.get("status") == "pending_review"
     ]
 
     approved_controls = [

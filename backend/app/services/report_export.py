@@ -25,7 +25,7 @@ def risk_report_to_csv(risk_reports: list[dict]) -> tuple[str, str]:
                 report_data.get("risk_level", ""),
                 report_data.get("risk_score", ""),
                 "; ".join(report_data.get("signals_found", [])),
-                report_data.get("summary", ""),
+                report_data.get("risk_summary", ""),
                 "; ".join(report_data.get("recommendations", [])),
                 report_data.get("analyzed_at", ""),
             ]

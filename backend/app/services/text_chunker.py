@@ -201,8 +201,20 @@ def chunk_text_by_sections(
         )
         section_text = cleaned_text[start:end].strip()
 
-        if section_text:
+        if not section_text:
+            continue
+
+        if len(section_text) <= chunk_size:
             sections.append(section_text)
+        else:
+            sections.extend(
+                _recursive_split(
+                    text=section_text,
+                    chunk_size=chunk_size,
+                    chunk_overlap=0,
+                    separators=["\n\n", "\n", ". ", "! ", "? ", "; ", " "],
+                )
+            )
 
     return sections
 
@@ -265,7 +277,7 @@ def _recursive_split(
             current_chunk = candidate
             continue
 
-        if current_chunk:
+        if current_chunk.strip():
             chunks.append(current_chunk.strip())
 
         if len(part) <= chunk_size:
@@ -281,10 +293,10 @@ def _recursive_split(
                 )
             )
 
-    if current_chunk:
+    if current_chunk.strip():
         chunks.append(current_chunk.strip())
 
-    return chunks
+    return [chunk for chunk in chunks if chunk]
 
 
 def chunk_csv_rows(text: str) -> list[str]:

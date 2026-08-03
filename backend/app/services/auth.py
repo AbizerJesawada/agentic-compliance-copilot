@@ -124,10 +124,9 @@ def verify_token(token: str) -> dict | None:
 
     try:
         payload = json.loads(encoded_payload)
-    except json.JSONDecodeError:
+        expires_at = datetime.fromisoformat(payload["expires_at"])
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
         return None
-
-    expires_at = datetime.fromisoformat(payload["expires_at"])
 
     if datetime.now(timezone.utc) > expires_at:
         return None
